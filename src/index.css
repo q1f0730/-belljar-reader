@@ -139,8 +139,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .edge.left::after { left: 50%; margin-left: -14px; transform: translateX(6px); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M10 3 5 8l5 5' fill='none' stroke='%2371717A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .edge.right::after { left: 50%; margin-left: -14px; transform: translateX(-6px); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m6 3 5 5-5 5' fill='none' stroke='%2371717A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .edge:hover::after { opacity: 1; transform: none; }
-.progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: transparent; }
-.progress i { display: block; height: 100%; background: var(--ink); transform-origin: 0 50%; transition: transform .5s var(--out); opacity: .8; }
+/* 全书进度：浅色细轨道，左右收进去避开圆角，不贴边 */
+.progress { position: absolute; left: clamp(24px, 3.2vw, 52px); right: clamp(24px, 3.2vw, 52px); bottom: 14px; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; pointer-events: auto; z-index: 3; }
+.progress i { display: block; height: 100%; border-radius: inherit; background: var(--ink-3); transform-origin: 0 50%; transition: transform .5s var(--out); }
 .skeleton { flex: 1; padding: 64px clamp(24px, 3.2vw, 52px); display: flex; flex-direction: column; gap: 16px; }
 .skeleton i { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--hover) 25%, var(--line) 50%, var(--hover) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -321,3 +322,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* 触屏：两侧窄条点一下翻页（也可左右滑），中间整页留给点句子 */
 @media (pointer: coarse) { .edge { width: 26px; } }
+@media (max-width: 760px) { .progress { left: 22px; right: 22px; bottom: 10px; } }

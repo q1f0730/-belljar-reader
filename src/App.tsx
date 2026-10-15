@@ -268,7 +268,9 @@ export default function App() {
   const chHls = useMemo(() => hls.filter(h => h.ch === chap?.n), [hls, chap])
 
   if (region) return <div className="wall"><h1>The Bell Jar</h1><p>{region}</p></div>
-  const pct = toc && chap ? ((chap.n - 1 + (info.page + 1) / info.pages) / toc.chapters.length) * 100 : 0
+  // 全书进度：章节号 + 本章页数占比；任何异常值（未加载、页数为 0、NaN）都夹到 0–100
+  const rawPct = toc && chap && toc.chapters.length ? ((chap.n - 1 + (info.page + 1) / Math.max(1, info.pages)) / toc.chapters.length) * 100 : 0
+  const pct = Number.isFinite(rawPct) ? Math.min(100, Math.max(0, rawPct)) : 0
 
   return (
     <div className="app" onMouseDown={e => {
@@ -303,7 +305,7 @@ export default function App() {
             hls={chHls} fontSize={prefs.fontSize} single={prefs.spread === 'single'} layoutKey={layoutKey} startAt={startAt}
             onEdge={d => goCh(ch + d, d === -1 ? { end: true } : {})} onPage={onPage} onClick={onClick} onMouseUp={onMouseUp} />
         ) : <div className="skeleton">{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ width: `${92 - (i % 3) * 14}%` }} />)}</div>}
-        <div className="progress"><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
+        <div className="progress" role="progressbar" aria-label="全书进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} title={`全书 ${Math.round(pct)}%`}><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
       </main>
 
       {bubble?.kind === 'word' && bpos && createPortal(
