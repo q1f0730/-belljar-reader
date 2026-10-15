@@ -90,6 +90,7 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
     <div className="stage">
       <button className="edge left" aria-label="上一页" onClick={prev} />
       <div className="viewport" ref={vp}
+        onScroll={e => { e.currentTarget.scrollLeft = 0; e.currentTarget.scrollTop = 0 }}
         onTouchStart={e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
         onTouchEnd={e => {
           const t = touch.current; if (!t) return; const dx = e.changedTouches[0].clientX - t.x

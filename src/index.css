@@ -75,7 +75,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 20px 0; }
 .rh-mode { margin-left: auto; font: 12px var(--song); border: 1px solid var(--rule); border-radius: 999px; padding: 2px 10px; }
 .rh-mode.zh { background: var(--accent); color: #fff; border-color: var(--accent); }
 .stage { flex: 1; position: relative; display: flex; min-height: 0; padding: 8px clamp(24px, 6vw, 96px) 44px; }
-.viewport { flex: 1; overflow: hidden; position: relative; }
+.viewport { flex: 1; overflow: hidden; overflow: clip; position: relative; }
 .flow { transition: transform .42s cubic-bezier(.3,.7,.2,1); column-fill: auto; line-height: 2.05; font-family: var(--serif); hyphens: auto; -webkit-hyphens: auto; text-align: justify; padding-top: 4px; }
 .flow p { margin: 0; text-indent: 1.6em; orphans: 2; widows: 2; }
 .flow p.first { text-indent: 0; }
