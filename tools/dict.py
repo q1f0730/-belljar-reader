@@ -15,8 +15,8 @@ for row in csv.DictReader(open('../ecdict.zip',encoding='utf-8')):
 def entry(w):
     r=D.get(w)
     if not r: return None
-    tr=[l for l in r['translation'].split('\\n') if l and not l.startswith('[网络]')][:4]
-    if not tr: tr=[l for l in r['translation'].split('\\n') if l][:2]
+    tr=[l for l in r['translation'].replace('\\r','').split('\\n') if l and not l.startswith('[网络]')][:4]
+    if not tr: tr=[l for l in r['translation'].replace('\\r','').split('\\n') if l][:2]
     return {'w':r['word'],'p':r['phonetic'],'t':tr}
 out={};miss=[]
 for w in sorted(words):

@@ -13,7 +13,7 @@
 - 进度、划线、笔记存本机 IndexedDB（申请持久存储），可导出/导入备份
 
 ## 数据
-书本原文与译文 **不在本仓库**。`tools/` 里的脚本把你自己的两本 EPUB 处理成按章 JSON（段落、句子对齐），输出到 `private/book/`（已 gitignore）。线上放在私有 Cloudflare KV，由 `functions/api` 读取，并且只对中国大陆请求开放。
+书本原文与译文 **不在本仓库**。`tools/` 里的脚本把你自己的两本 EPUB 处理成按章 JSON（段落、句子对齐），输出到 `private/book/`（已 gitignore）。线上放在私有 Cloudflare KV，由 `worker/index.ts` 读取，并且只对中国大陆请求开放。
 
 词典数据来自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT）。
 
@@ -22,4 +22,13 @@
 npm i
 python3 tools/parse.py && python3 tools/align.py && python3 tools/dict.py   # 生成数据（需要自备 EPUB）
 npm run dev
+```
+
+## 部署
+
+Cloudflare Worker（`worker/index.ts`）：网页文件放 KV `SITE`，书本数据放私有 KV `BOOK`，绑定域名见 `wrangler.toml`。
+
+```bash
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… ./tools/deploy.sh          # 只更新网页
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… ./tools/deploy.sh --book   # 同时更新书本数据
 ```

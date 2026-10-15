@@ -1,8 +1,15 @@
 name = "belljar-reader"
-pages_build_output_dir = "dist"
+main = "worker/index.ts"
 compatibility_date = "2026-10-01"
+workers_dev = true
+routes = [{ pattern = "watercoloreyes.cn", custom_domain = true }]
 
-# 书本数据放在私有 KV（不进仓库）。键：toc.json、ch01.json … ch20.json
+# 书本数据（私有，不进仓库）。键：toc.json、ch01.json … ch20.json
 [[kv_namespaces]]
 binding = "BOOK"
 id = "832b6d4a049346ad945ed369b0f94885"
+
+# 网页静态文件（npm run build 的 dist/），由 tools/deploy.sh 上传
+[[kv_namespaces]]
+binding = "SITE"
+id = "947726edbcd242aa8b895940546d62b5"
