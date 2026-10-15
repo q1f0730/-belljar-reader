@@ -13,7 +13,7 @@
 - 进度、划线、笔记存本机 IndexedDB（申请持久存储），可导出/导入备份
 
 ## 数据
-书本原文与译文 **不在本仓库**。`tools/` 里的脚本把你自己的两本 EPUB 处理成按章 JSON（段落、句子对齐），输出到 `private/book/`（已 gitignore）。线上放在私有 R2 桶，由 `functions/api` 读取，并且只对中国大陆请求开放。
+书本原文与译文 **不在本仓库**。`tools/` 里的脚本把你自己的两本 EPUB 处理成按章 JSON（段落、句子对齐），输出到 `private/book/`（已 gitignore）。线上放在私有 Cloudflare KV，由 `functions/api` 读取，并且只对中国大陆请求开放。
 
 词典数据来自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT）。
 

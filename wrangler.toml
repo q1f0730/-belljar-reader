@@ -2,6 +2,7 @@ name = "belljar-reader"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
 
-[[r2_buckets]]
+# 书本数据放在私有 KV（不进仓库）。键：toc.json、ch01.json … ch20.json
+[[kv_namespaces]]
 binding = "BOOK"
-bucket_name = "belljar-book"
+id = "832b6d4a049346ad945ed369b0f94885"
