@@ -113,6 +113,11 @@ export default function App() {
     addEventListener('keydown', k); return () => removeEventListener('keydown', k)
   }, [])
 
+  // 取消选中时，划线浮条跟着消失
+  useEffect(() => {
+    const f = () => { const s = getSelection(); if (!s || s.isCollapsed) setSel(p => (p && !p.edit ? null : p)) }
+    document.addEventListener('selectionchange', f); return () => document.removeEventListener('selectionchange', f)
+  }, [])
   const unitsOf = useCallback((c: Chapter) => c.paras.flatMap(p => p.u), [])
 
   // 旧数据里重叠的划线：打开该章时按时间顺序合并一次
@@ -225,7 +230,7 @@ export default function App() {
   }
 
   const onPage = useCallback(({ page, pages, unit }: { page: number; pages: number; unit: string | null }) => {
-    setInfo({ page, pages })
+    setInfo({ page, pages }); setSel(null)
     if (unit && ready) store.set('progress', { ch: Number(unit.split('.')[0]), unit })
   }, [ready])
 
@@ -256,7 +261,11 @@ export default function App() {
   const pct = toc && chap ? ((chap.n - 1 + (info.page + 1) / info.pages) / toc.chapters.length) * 100 : 0
 
   return (
-    <div className="app" onMouseDown={e => { if (!(e.target as HTMLElement).closest('.sheet,.tools,.sel-pop')) { if (panel === 'tr') setPanel(null) } }}>
+    <div className="app" onMouseDown={e => {
+      const t = e.target as HTMLElement
+      if (!t.closest('.sel-pop,[data-hid]')) setSel(p => (p?.edit ? null : p))
+      if (!t.closest('.sheet,.tools,.sel-pop')) { if (panel === 'tr') setPanel(null) }
+    }}>
       <Sidebar panel={panel} setPanel={setPanel} trOn={trOn} toggleTr={toggleTr} mode={mode} baseZh={baseZh} setMode={setMode} toggleFull={toggleFull}
         toc={toc} ch={ch} goCh={n => { setPanel(null); goCh(n) }} hls={hls}
         goHl={h => goCh(h.ch, { unit: h.start.u })}
