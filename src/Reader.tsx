@@ -4,7 +4,7 @@ import { UnitView } from './Unit'
 
 export interface ReaderHandle { next(): void; prev(): void; goUnit(u: string): void }
 interface Props {
-  chapter: Chapter; langOf: (u: string) => Lang; mode: Mode
+  chapter: Chapter; langOf: (u: string) => Lang; base: Lang; mode: Mode | 'none'
   glosses: Map<string, string>; active: string | null; hls: Highlight[]
   fontSize: number; single: boolean; layoutKey: string
   startAt: { unit?: string; end?: boolean }
@@ -107,7 +107,7 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
               {para.u.map((u, k) => (
                 <span key={u.id}>
                   {k > 0 && p.langOf(u.id) === 'en' && p.langOf(para.u[k - 1].id) === 'en' ? ' ' : ''}
-                  <UnitView unit={u} lang={p.langOf(u.id)} glosses={p.glosses} hls={p.hls} active={p.active} />
+                  <UnitView unit={u} lang={p.langOf(u.id)} tr={p.langOf(u.id) !== p.base} glosses={p.glosses} hls={p.hls} active={p.active} />
                 </span>
               ))}
               {para.fn?.length ? <sup className="fn" data-fn={para.fn.join('\n')} title="译注">注</sup> : null}

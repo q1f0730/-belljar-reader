@@ -3,7 +3,7 @@ import type { Highlight, Mode, Prefs, Toc } from './types'
 
 export type Panel = 'toc' | 'tr' | 'marks' | 'set' | null
 interface Props {
-  panel: Panel; setPanel(p: Panel): void
+  panel: Panel; setPanel(p: Panel): void; trOn: boolean; toggleTr(): void
   mode: Mode; baseZh: boolean; setMode(m: Mode): void; toggleFull(): void
   toc: Toc | null; ch: number; goCh(n: number): void
   hls: Highlight[]; goHl(h: Highlight): void; delHl(id: string): void; noteHl(id: string, note: string): void
@@ -19,23 +19,25 @@ const MODES: { k: 'word' | 'sentence' | 'full'; ch: string; t: string; d: string
 
 export function Sidebar(p: Props) {
   const tog = (x: Panel) => p.setPanel(p.panel === x ? null : x)
-  const trOn = p.panel === 'tr'
+  const trOn = p.panel === 'tr' // 子菜单是否展开
   return (
     <>
       <nav className="tools" aria-label="工具">
         <Tool on={p.panel === 'toc'} label="目录" onClick={() => tog('toc')}><BookOpenText weight="bold" /></Tool>
         <div className="tool-wrap">
-          <Tool on={trOn} label="翻译" onClick={() => tog('tr')} dot={p.baseZh || p.mode === 'word'}><Translate weight="bold" /></Tool>
+          <Tool on={p.trOn} label={p.trOn ? '翻译（再点关闭）' : '翻译'} onClick={p.toggleTr}><Translate weight="bold" /></Tool>
           <div className={'sub' + (trOn ? ' open' : '')} role="menu" aria-hidden={!trOn}>
             {MODES.map((m, i) => {
-              const on = m.k === 'full' ? p.baseZh : !p.baseZh && p.mode === m.k
-              const half = m.k !== 'full' && p.baseZh && p.mode === m.k
+              // 全文中文时：词 灰掉不可用，句 自动生效
+              const off = m.k === 'word' && p.baseZh
+              const on = m.k === 'full' ? p.baseZh : p.trOn && (p.baseZh ? m.k === 'sentence' : p.mode === m.k)
               return (
                 <button key={m.k} role="menuitemradio" aria-checked={on} tabIndex={trOn ? 0 : -1}
-                  className={'sub-btn' + (on ? ' on' : '') + (half ? ' half' : '')} style={{ ['--i' as string]: i }}
+                  disabled={off} aria-disabled={off}
+                  className={'sub-btn' + (on ? ' on' : '') + (off ? ' off' : '')} style={{ ['--i' as string]: i }}
                   onClick={() => (m.k === 'full' ? p.toggleFull() : p.setMode(m.k))}>
                   <span className="sub-ch">{m.ch}</span>
-                  <span className="tip"><b>{m.k === 'full' && p.baseZh ? '切回英文' : m.t}</b>{m.d}</span>
+                  <span className="tip"><b>{m.k === 'full' && p.baseZh ? '切回英文' : m.t}</b>{off ? '全文中文时不可用' : m.d}</span>
                 </button>
               )
             })}

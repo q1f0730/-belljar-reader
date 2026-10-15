@@ -79,7 +79,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sub-btn:active .sub-ch { transform: scale(.88); }
 .sub-btn.on { background: var(--accent); color: #fff; }
 .sub-btn.on .sub-ch { animation: boing .5s var(--spring); }
-.sub-btn.half { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); }
+.sub-btn.off { opacity: .32; cursor: not-allowed; }
+.sub-btn.off:hover { background: none; color: inherit; }
+.sub-btn.off .sub-ch { transform: none; }
 @keyframes boing { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
 .sub-btn .tip { left: calc(100% + 14px); top: 50%; transform: translate(-4px, -50%); display: flex; flex-direction: column; gap: 4px; text-align: left; line-height: 1.2; padding: 8px 10px; }
 .sub-btn .tip b { font-weight: 600; }
@@ -203,8 +205,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* —— 句子单元 —— */
 .unit { border-radius: 4px; transition: background .2s, box-shadow .2s; }
 .unit.zh {
-  font-family: var(--song); color: var(--zh); font-size: .9em; letter-spacing: .02em; animation: inkin .5s var(--out);
-  background: linear-gradient(transparent 82%, color-mix(in srgb, var(--accent) 22%, transparent) 82%, color-mix(in srgb, var(--accent) 22%, transparent) 92%, transparent 92%);
+  font-family: var(--song); color: var(--zh); font-size: .9em; letter-spacing: .02em;
+}
+/* 换成了与当前全文语言不同的句子：虚化 + 下划线 */
+.unit.tr {
+  color: color-mix(in srgb, var(--ink) 58%, transparent); animation: inkin .5s var(--out);
+  background: linear-gradient(transparent 84%, color-mix(in srgb, var(--accent) 26%, transparent) 84%, color-mix(in srgb, var(--accent) 26%, transparent) 93%, transparent 93%);
 }
 @keyframes inkin { from { opacity: 0; filter: blur(4px); } }
 .mode-sentence .unit { cursor: pointer; }
@@ -245,7 +251,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* —— 气泡 —— */
 .bubble {
-  position: fixed; z-index: 60; transform: translate(-50%, -100%); width: max-content; max-width: 320px; min-width: 200px;
+  position: fixed; z-index: 60; transform: translate(-50%, -100%); width: max-content; max-width: min(320px, calc(100vw - 20px)); min-width: min(200px, calc(100vw - 20px));
   background: var(--sheet); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
   line-height: 1.55; box-shadow: var(--shadow-lg); animation: bub .35s var(--spring); transform-origin: 50% 100%;
 }
@@ -265,11 +271,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bubble.note { max-width: 300px; }
 .bubble.note p { margin: 0 0 4px; font-family: var(--song); }
 .sel-pop {
-  position: fixed; z-index: 60; transform: translate(-50%, calc(-100% - 12px)); display: flex; align-items: center; gap: 6px;
-  background: var(--sheet); border: 1px solid var(--line); padding: 6px 8px 6px 12px; border-radius: 999px; box-shadow: var(--shadow-lg);
-  animation: bub .3s var(--spring);
+  position: fixed; z-index: 60; transform: translate(-50%, calc(-100% - 18px)); display: flex; align-items: center; gap: 8px;
+  background: var(--ink); color: var(--sheet); padding: 7px 9px 7px 14px; border-radius: 999px;
+  box-shadow: 0 10px 30px -8px rgb(0 0 0 / .35), 0 2px 6px rgb(0 0 0 / .12); animation: selin .32s var(--spring); transform-origin: 50% 100%;
 }
-.sp-l { font-size: 12px; font-weight: 500; color: var(--ink-2); margin-right: 4px; }
+.sel-pop::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; background: var(--ink); transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
+@keyframes selin { from { opacity: 0; scale: .8; translate: 0 6px; } }
+.sp-l { font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--sheet) 70%, transparent); margin-right: 2px; letter-spacing: .02em; }
+.sel-pop button { position: relative; z-index: 1; border-color: var(--ink) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--sheet) 25%, transparent) !important; }
+/* 选中文字：柔和珊瑚色，不用系统蓝 */
+.flow ::selection { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.flow .unit.zh ::selection { color: var(--ink); }
 .sel-pop button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--sheet); box-shadow: 0 0 0 1px var(--line); padding: 0; transition: transform .2s var(--spring); }
 .sel-pop button:hover { transform: scale(1.2); }
 .toast {

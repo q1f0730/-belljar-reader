@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Anchor, Chapter, DictEntry, Highlight, Lang, Mode, Prefs, Toc } from './types'
 import { loadChapter, loadDict, loadToc, lookup, RegionError } from './api'
@@ -24,6 +24,7 @@ export default function App() {
   const [startAt, setStartAt] = useState<{ unit?: string; end?: boolean }>({})
   const [mode, setModeS] = useState<Mode>('sentence')
   const [baseZh, setBaseZh] = useState(false)
+  const [trOn, setTrOn] = useState(true) // 「译」开关：关掉后点正文不再翻译
   const [flips, setFlips] = useState<Record<string, Lang>>({})
   const [glosses, setGlosses] = useState<Map<string, string>>(new Map())
   const [bubble, setBubble] = useState<Bubble | Note | null>(null)
@@ -43,14 +44,15 @@ export default function App() {
   // 启动：恢复本机数据
   useEffect(() => {
     (async () => {
-      const [pr, prog, h, f, m] = await Promise.all([
+      const [pr, prog, h, f, m, t] = await Promise.all([
         store.get<Prefs>('prefs'), store.get<{ ch: number; unit?: string }>('progress'),
-        store.get<Highlight[]>('highlights'), store.get<{ base: boolean; flips: Record<string, Lang> }>('flips'), store.get<Mode>('mode'),
+        store.get<Highlight[]>('highlights'), store.get<{ base: boolean; flips: Record<string, Lang> }>('flips'), store.get<Mode>('mode'), store.get<boolean>('trOn'),
       ])
       if (pr) setPrefsS({ ...DEF_PREFS, ...pr })
       if (h) setHls(h)
       if (f) { setBaseZh(f.base); setFlips(f.flips) }
       if (m) setModeS(m)
+      if (t === false) setTrOn(false)
       setStartAt({ unit: prog?.unit }); setCh(prog?.ch || 1)
       setReady(true)
       setPersisted(await store.persist())
@@ -68,17 +70,28 @@ export default function App() {
   useEffect(() => { if (ready) store.set('highlights', hls) }, [hls, ready])
   useEffect(() => { if (ready) store.set('flips', { base: baseZh, flips }) }, [baseZh, flips, ready])
   useEffect(() => { if (ready) store.set('mode', mode) }, [mode, ready])
+  useEffect(() => { if (ready) store.set('trOn', trOn) }, [trOn, ready])
   useEffect(() => { document.documentElement.dataset.theme = prefs.theme }, [prefs.theme])
 
+  // 全文中文时只能逐句翻译（单词释义只对英文有意义）
+  const eff: Mode | 'none' = !trOn ? 'none' : baseZh ? 'sentence' : mode
   const langOf = useCallback((u: string): Lang => flips[u] ?? (baseZh ? 'zh' : 'en'), [flips, baseZh])
 
   const clearWords = () => { setGlosses(new Map()); setBubble(null) }
   const setMode = (m: Mode) => {
+    if (baseZh && m === 'word') return
+    setTrOn(true)
     if (m !== 'word') clearWords()
     setModeS(m); say(m === 'word' ? '单词翻译：悬停预选，点一下出释义' : '逐句翻译：点一句换成中文')
   }
   const toggleFull = () => {
-    clearWords(); setFlips({}); setBaseZh(b => { say(!b ? '全文已切换为中文' : '全文已切回英文'); return !b })
+    setTrOn(true); clearWords(); setFlips({}); setBaseZh(b => { say(!b ? '全文已切换为中文' : '全文已切回英文'); return !b })
+  }
+
+  // 点「译」：关着→打开并弹出菜单；开着→关闭（黑色消失，点正文不再翻译）
+  const toggleTr = () => {
+    if (trOn) { setTrOn(false); setPanel(null); clearWords(); say('翻译已关闭') }
+    else { setTrOn(true); setPanel('tr') }
   }
 
   const goCh = (n: number, at: { unit?: string; end?: boolean } = {}) => {
@@ -113,10 +126,10 @@ export default function App() {
     const dot = t.closest<HTMLElement>('.hl-dot'); if (dot) { flipHl(dot.dataset.hl!); return }
     const fn = t.closest<HTMLElement>('.fn')
     if (fn) { const r = fn.getBoundingClientRect(); setBubble({ kind: 'note', text: fn.dataset.fn!, x: r.left + r.width / 2, y: r.top }); return }
-    const unit = t.closest<HTMLElement>('.unit'); if (!unit) { setBubble(null); return }
+    const unit = t.closest<HTMLElement>('.unit'); if (!unit || eff === 'none') { setBubble(null); return }
     const u = unit.dataset.u!, lang = unit.dataset.lang as Lang
     setSel(null)
-    if (mode === 'sentence' || lang === 'zh') {
+    if (eff === 'sentence' || lang === 'zh') {
       // 逐句：切换；单词模式下点中文句子 = 复原成英文
       const to: Lang = lang === 'en' ? 'zh' : 'en'
       setFlips(f => { const n = { ...f }; if ((baseZh ? 'zh' : 'en') === to) delete n[u]; else n[u] = to; return n })
@@ -151,6 +164,17 @@ export default function App() {
       const r = s.getRangeAt(0)
       const a = anchorOf(r.startContainer, r.startOffset, false), b = anchorOf(r.endContainer, r.endOffset, true)
       if (!a || !b) return
+      // 英文选区吸附到整词，看到的就是将要划的
+      if (a.lang === 'en' && a.lang === b.lang) {
+        const wOf = (n: Node) => (n.nodeType === 3 ? n.parentElement : (n as Element))?.closest<HTMLElement>('.w')
+        const ws = wOf(r.startContainer), we = wOf(r.endContainer)
+        const sn = ws?.firstChild, en = we?.firstChild
+        if (sn || en) {
+          const sc = sn ?? r.startContainer, so = sn ? 0 : r.startOffset
+          const ec = en ?? r.endContainer, eo = en ? (b.o > +we!.dataset.o! ? en.textContent!.length : 0) : r.endOffset
+          try { s.setBaseAndExtent(sc, so, ec, eo) } catch { /* ignore */ }
+        }
+      }
       if (a.lang !== b.lang) { say('一次划线请在同一种语言里'); return }
       const units = unitsOf(chap)
       const ia = units.findIndex(u => u.id === a.u), ib = units.findIndex(u => u.id === b.u)
@@ -187,6 +211,13 @@ export default function App() {
     })
     return () => cancelAnimationFrame(id)
   }, [bubble, info, glosses, prefs])
+  // 气泡不超出屏幕左右
+  const bubEl = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = bubEl.current; if (!el || !bpos) return
+    const w = el.offsetWidth, m = 10
+    el.style.left = `${Math.max(m + w / 2, Math.min(innerWidth - m - w / 2, bpos.x))}px`
+  }, [bpos, bubble])
 
   const layoutKey = useMemo(() => `${baseZh}|${JSON.stringify(flips)}|${glosses.size}|${hls.length}|${prefs.spread}`, [baseZh, flips, glosses, hls, prefs.spread])
   const chHls = useMemo(() => hls.filter(h => h.ch === chap?.n), [hls, chap])
@@ -196,7 +227,7 @@ export default function App() {
 
   return (
     <div className="app" onMouseDown={e => { if (!(e.target as HTMLElement).closest('.sheet,.tools,.sel-pop')) { if (panel === 'tr') setPanel(null) } }}>
-      <Sidebar panel={panel} setPanel={setPanel} mode={mode} baseZh={baseZh} setMode={setMode} toggleFull={toggleFull}
+      <Sidebar panel={panel} setPanel={setPanel} trOn={trOn} toggleTr={toggleTr} mode={mode} baseZh={baseZh} setMode={setMode} toggleFull={toggleFull}
         toc={toc} ch={ch} goCh={n => { setPanel(null); goCh(n) }} hls={hls}
         goHl={h => goCh(h.ch, { unit: h.start.u })}
         delHl={id => setHls(h => h.filter(x => x.id !== id))}
@@ -218,7 +249,7 @@ export default function App() {
       <main className={'sheet-page' + (panel && panel !== 'tr' ? ' shifted' : '')}>
         {err && <div className="wall small">{err}</div>}
         {chap ? (
-          <Reader ref={reader} chapter={chap} langOf={langOf} mode={mode} glosses={glosses} active={bubble?.kind === 'word' ? bubble.key : null}
+          <Reader ref={reader} chapter={chap} langOf={langOf} base={baseZh ? 'zh' : 'en'} mode={eff} glosses={glosses} active={bubble?.kind === 'word' ? bubble.key : null}
             hls={chHls} fontSize={prefs.fontSize} single={prefs.spread === 'single'} layoutKey={layoutKey} startAt={startAt}
             onEdge={d => goCh(ch + d, d === -1 ? { end: true } : {})} onPage={onPage} onClick={onClick} onMouseUp={onMouseUp} />
         ) : <div className="skeleton">{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ width: `${92 - (i % 3) * 14}%` }} />)}</div>}
@@ -226,7 +257,7 @@ export default function App() {
       </main>
 
       {bubble?.kind === 'word' && bpos && createPortal(
-        <div className={'bubble' + (bpos.below ? ' below' : '')} style={{ left: bpos.x, top: bpos.y }} onMouseDown={e => e.stopPropagation()}>
+        <div ref={bubEl} className={'bubble' + (bpos.below ? ' below' : '')} style={{ left: bpos.x, top: bpos.y }} onMouseDown={e => e.stopPropagation()}>
           <div className="b-head"><b>{bubble.word}</b>{bubble.es[0]?.e.p && <span className="ipa">/{bubble.es[0].e.p}/</span>}
             <button className="b-x" onClick={() => setBubble(null)} aria-label="关闭">×</button></div>
           {!bubble.es.length && <p className="b-miss">词典里没收这个词（多半是作者自造的复合词）。</p>}

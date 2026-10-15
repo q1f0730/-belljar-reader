@@ -10,7 +10,7 @@ export function rangeIn(h: Highlight, uid: string, len: number): [number, number
 }
 
 interface Props {
-  unit: U; lang: Lang; glosses: Map<string, string>; hls: Highlight[]; active: string | null
+  unit: U; lang: Lang; tr: boolean; glosses: Map<string, string>; hls: Highlight[]; active: string | null
 }
 
 function colorAt(spans: { s: number; e: number; c: string; id: string }[], a: number, b: number) {
@@ -19,7 +19,7 @@ function colorAt(spans: { s: number; e: number; c: string; id: string }[], a: nu
   return hit
 }
 
-export const UnitView = memo(function UnitView({ unit, lang, glosses, hls, active }: Props) {
+export const UnitView = memo(function UnitView({ unit, lang, tr, glosses, hls, active }: Props) {
   const text = lang === 'en' ? unitText(unit.en) : unit.zh
   const mine: { s: number; e: number; c: string; id: string }[] = []
   const dots: Highlight[] = []
@@ -37,7 +37,7 @@ export const UnitView = memo(function UnitView({ unit, lang, glosses, hls, activ
     const cuts = new Set([0, text.length]); mine.forEach(r => { cuts.add(Math.max(0, r.s)); cuts.add(Math.min(text.length, r.e)) })
     const pts = [...cuts].sort((a, b) => a - b)
     return (
-      <span className="unit zh" data-u={unit.id} data-lang="zh">
+      <span className={'unit zh' + (tr ? ' tr' : '')} data-u={unit.id} data-lang="zh">
         {pts.slice(0, -1).map((a, i) => {
           const b = pts[i + 1]; const h = colorAt(mine, a, b)
           return <span key={a} data-o={a} data-l="zh" className={h ? 'hl' : undefined}
@@ -49,7 +49,7 @@ export const UnitView = memo(function UnitView({ unit, lang, glosses, hls, activ
   }
   const toks = tokens(text)
   return (
-    <span className="unit en" data-u={unit.id} data-lang="en">
+    <span className={'unit en' + (tr ? ' tr' : '')} data-u={unit.id} data-lang="en">
       {toks.map(t => {
         const h = colorAt(mine, t.o, t.o + t.s.length)
         const style = h ? { ['--c' as string]: h.c } : undefined
