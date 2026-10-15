@@ -8,7 +8,7 @@ import { Sidebar, type Panel } from './Sidebar'
 import { shortGloss } from './gloss'
 import { cmpUnit, tokens, unitText } from './text'
 
-const COLORS = ['#f2c94c', '#f08a8a', '#7fb3e6', '#8fc79a']
+const COLORS = ['#F5D77A', '#F4A3A3', '#9CC8F0', '#A8D5AE']
 const DEF_PREFS: Prefs = { fontSize: 19, theme: 'paper', spread: 'auto' }
 
 interface Bubble { kind: 'word'; key: string; word: string; es: { key: string; e: DictEntry }[] }
@@ -195,7 +195,7 @@ export default function App() {
   const pct = toc && chap ? ((chap.n - 1 + (info.page + 1) / info.pages) / toc.chapters.length) * 100 : 0
 
   return (
-    <div className="app" onMouseDown={e => { if (!(e.target as HTMLElement).closest('.drawer,.flyout,.rail,.sel-pop')) { if (panel === 'tr') setPanel(null) } }}>
+    <div className="app" onMouseDown={e => { if (!(e.target as HTMLElement).closest('.sheet,.tools,.sel-pop')) { if (panel === 'tr') setPanel(null) } }}>
       <Sidebar panel={panel} setPanel={setPanel} mode={mode} baseZh={baseZh} setMode={setMode} toggleFull={toggleFull}
         toc={toc} ch={ch} goCh={n => { setPanel(null); goCh(n) }} hls={hls}
         goHl={h => goCh(h.ch, { unit: h.start.u })}
@@ -208,25 +208,27 @@ export default function App() {
         }}
         onImport={async f => { try { await store.importAll(JSON.parse(await f.text())); location.reload() } catch (e) { say(String((e as Error).message)) } }}
       />
-      <main className="page-area">
-        <header className="runhead">
-          <span className="rh-book">The Bell Jar</span>
-          <span className="rh-ch">{chap ? `Chapter ${chap.n}` : ''}</span>
-          <span className={'rh-mode' + (baseZh ? ' zh' : '')}>{baseZh ? '中文' : mode === 'word' ? '词' : '句'}</span>
-        </header>
+      <header className="topbar">
+        <span className="tb-book">The Bell Jar</span>
+        <i className="tb-sep" />
+        <span className="tb-ch">{chap ? `Chapter ${chap.n}` : '…'}</span>
+        <span className="tb-page mono">{info.page + 1} / {info.pages}</span>
+        <span className={'tb-mode' + (baseZh ? ' zh' : '')} key={`${baseZh}${mode}`}>{baseZh ? '全文中文' : mode === 'word' ? '单词翻译' : '逐句翻译'}</span>
+      </header>
+      <main className={'sheet-page' + (panel && panel !== 'tr' ? ' shifted' : '')}>
         {err && <div className="wall small">{err}</div>}
         {chap ? (
           <Reader ref={reader} chapter={chap} langOf={langOf} mode={mode} glosses={glosses} active={bubble?.kind === 'word' ? bubble.key : null}
             hls={chHls} fontSize={prefs.fontSize} single={prefs.spread === 'single'} layoutKey={layoutKey} startAt={startAt}
             onEdge={d => goCh(ch + d, d === -1 ? { end: true } : {})} onPage={onPage} onClick={onClick} onMouseUp={onMouseUp} />
-        ) : <div className="loading">…</div>}
-        <div className="progress"><i style={{ width: `${pct}%` }} /></div>
+        ) : <div className="skeleton">{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ width: `${92 - (i % 3) * 14}%` }} />)}</div>}
+        <div className="progress"><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
       </main>
 
       {bubble?.kind === 'word' && bpos && createPortal(
         <div className={'bubble' + (bpos.below ? ' below' : '')} style={{ left: bpos.x, top: bpos.y }} onMouseDown={e => e.stopPropagation()}>
           <div className="b-head"><b>{bubble.word}</b>{bubble.es[0]?.e.p && <span className="ipa">/{bubble.es[0].e.p}/</span>}
-            <button className="b-x" onClick={() => setBubble(null)}>×</button></div>
+            <button className="b-x" onClick={() => setBubble(null)} aria-label="关闭">×</button></div>
           {!bubble.es.length && <p className="b-miss">词典里没收这个词（多半是作者自造的复合词）。</p>}
           {bubble.es.map(({ key, e }) => (
             <div key={key} className="b-entry">

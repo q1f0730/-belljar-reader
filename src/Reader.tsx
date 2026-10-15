@@ -113,11 +113,10 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
               {para.fn?.length ? <sup className="fn" data-fn={para.fn.join('\n')} title="译注">注</sup> : null}
             </p>
           ))}
-          <div className="ch-end">❦</div>
+          <div className="ch-end"><i /></div>
         </div>
       </div>
       <button className="edge right" aria-label="下一页" onClick={next} />
-      <div className="folio">{page + 1} / {pages}</div>
     </div>
   )
 })

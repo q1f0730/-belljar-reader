@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@fontsource/eb-garamond/400.css'
-import '@fontsource/eb-garamond/400-italic.css'
-import '@fontsource/eb-garamond/500.css'
+import '@fontsource-variable/newsreader'
+import '@fontsource-variable/newsreader/wght-italic.css'
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
 import './index.css'
 import App from './App'
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
