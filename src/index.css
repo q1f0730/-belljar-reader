@@ -284,6 +284,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .flow .unit.zh ::selection { color: var(--ink); }
 .sel-pop button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--sheet); box-shadow: 0 0 0 1px var(--line); padding: 0; transition: transform .2s var(--spring); }
 .sel-pop button:hover { transform: scale(1.2); }
+.sel-pop button.cur { box-shadow: 0 0 0 2px var(--sheet) !important; }
+.sp-sep { width: 1px; height: 16px; background: color-mix(in srgb, var(--sheet) 25%, transparent); margin: 0 2px; }
+.sel-pop .sp-erase { border: 0 !important; width: auto !important; height: 24px !important; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px 0 6px !important; border-radius: 999px !important; background: transparent !important; box-shadow: none !important; color: var(--sheet); font: 500 12px var(--sans); }
+.sel-pop .sp-erase:hover { transform: none; background: color-mix(in srgb, var(--sheet) 14%, transparent) !important; }
+.sp-erase svg { font-size: 14px; }
+[data-hid] { cursor: pointer; }
 .toast {
   position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 70; background: var(--ink); color: var(--sheet);
   padding: 9px 16px; border-radius: 999px; font-weight: 500; box-shadow: var(--shadow-lg); animation: toast .4s var(--spring);

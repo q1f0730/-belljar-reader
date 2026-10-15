@@ -40,7 +40,7 @@ export const UnitView = memo(function UnitView({ unit, lang, tr, glosses, hls, a
       <span className={'unit zh' + (tr ? ' tr' : '')} data-u={unit.id} data-lang="zh">
         {pts.slice(0, -1).map((a, i) => {
           const b = pts[i + 1]; const h = colorAt(mine, a, b)
-          return <span key={a} data-o={a} data-l="zh" className={h ? 'hl' : undefined}
+          return <span key={a} data-o={a} data-l="zh" data-hid={h?.id} className={h ? 'hl' : undefined}
             style={h ? { ['--c' as string]: h.c } : undefined}>{text.slice(a, b)}</span>
         })}
         {dotEls}
@@ -53,15 +53,15 @@ export const UnitView = memo(function UnitView({ unit, lang, tr, glosses, hls, a
       {toks.map(t => {
         const h = colorAt(mine, t.o, t.o + t.s.length)
         const style = h ? { ['--c' as string]: h.c } : undefined
-        if (!t.w) return <span key={t.o} data-o={t.o} data-l="en" className={h ? 'hl' : undefined} style={style}>{t.s}</span>
+        if (!t.w) return <span key={t.o} data-o={t.o} data-l="en" data-hid={h?.id} className={h ? 'hl' : undefined} style={style}>{t.s}</span>
         const key = `${unit.id}:${t.o}`
         const g = glosses.get(key)
         if (g === undefined)
-          return <span key={t.o} data-o={t.o} data-l="en" className={h ? 'w hl' : 'w'} style={style}>{t.s}</span>
+          return <span key={t.o} data-o={t.o} data-l="en" data-hid={h?.id} className={h ? 'w hl' : 'w'} style={style}>{t.s}</span>
         return (
           <span key={t.o} className={'gw' + (active === key ? ' on' : '')} data-g={key}>
             <span className="gl" aria-hidden>{g}</span>
-            <span data-o={t.o} data-l="en" className={h ? 'w hl' : 'w'} style={style}>{t.s}</span>
+            <span data-o={t.o} data-l="en" data-hid={h?.id} className={h ? 'w hl' : 'w'} style={style}>{t.s}</span>
           </span>
         )
       })}

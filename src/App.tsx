@@ -6,14 +6,16 @@ import * as store from './store'
 import { Reader, type ReaderHandle } from './Reader'
 import { Sidebar, type Panel } from './Sidebar'
 import { shortGloss } from './gloss'
-import { cmpUnit, tokens, unitText } from './text'
+import { cmpUnit, tokens } from './text'
+import { addMerged, erase, overlaps, textOf } from './hl'
+import { Eraser } from '@phosphor-icons/react'
 
 const COLORS = ['#F5D77A', '#F4A3A3', '#9CC8F0', '#A8D5AE']
 const DEF_PREFS: Prefs = { fontSize: 19, theme: 'paper', spread: 'auto' }
 
 interface Bubble { kind: 'word'; key: string; word: string; es: { key: string; e: DictEntry }[] }
 interface Note { kind: 'note'; text: string; x: number; y: number }
-interface SelPop { x: number; y: number; lang: Lang; start: Anchor; end: Anchor; text: string }
+interface SelPop { x: number; y: number; lang: Lang; start: Anchor; end: Anchor; text: string; over: boolean; edit?: string }
 
 export default function App() {
   const [toc, setToc] = useState<Toc | null>(null)
@@ -113,6 +115,25 @@ export default function App() {
 
   const unitsOf = useCallback((c: Chapter) => c.paras.flatMap(p => p.u), [])
 
+  // 旧数据里重叠的划线：打开该章时按时间顺序合并一次
+  useEffect(() => {
+    if (!chap || !ready) return
+    const mine = hls.filter(h => h.ch === chap.n).sort((a, b) => a.created - b.created)
+    const dup = mine.some((h, i) => mine.some((g, j) => j > i && g.lang === h.lang && overlaps(g, h.start, h.end)))
+    if (!dup) return
+    let out = hls.filter(h => h.ch !== chap.n)
+    const units = unitsOf(chap)
+    let acc: Highlight[] = []
+    for (const h of mine) {
+      const before = acc.length
+      acc = addMerged(acc, units, { lang: h.lang, ch: h.ch, start: h.start, end: h.end, color: h.color })
+      const m = acc[acc.length - 1]
+      if (acc.length > before) acc[acc.length - 1] = { ...m, id: h.id, note: h.note, created: h.created }
+      else if (h.note?.trim()) acc[acc.length - 1] = { ...m, note: [m.note, h.note].filter(Boolean).join('\n') }
+    }
+    out = [...out, ...acc]; setHls(out)
+  }, [chap, ready]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const flipHl = (id: string) => {
     const h = hls.find(x => x.id === id); if (!h || !chap) return
     const nf = { ...flips }
@@ -126,6 +147,12 @@ export default function App() {
     const dot = t.closest<HTMLElement>('.hl-dot'); if (dot) { flipHl(dot.dataset.hl!); return }
     const fn = t.closest<HTMLElement>('.fn')
     if (fn) { const r = fn.getBoundingClientRect(); setBubble({ kind: 'note', text: fn.dataset.fn!, x: r.left + r.width / 2, y: r.top }); return }
+    // 点已有划线：弹出改色 / 取消
+    const hel = t.closest<HTMLElement>('[data-hid]')
+    if (hel) {
+      const h = hls.find(x => x.id === hel.dataset.hid)
+      if (h) { const r = hel.getBoundingClientRect(); setBubble(null); setSel({ x: r.left + r.width / 2, y: r.top, lang: h.lang, start: h.start, end: h.end, text: h.text, over: true, edit: h.id }); return }
+    }
     const unit = t.closest<HTMLElement>('.unit'); if (!unit || eff === 'none') { setBubble(null); return }
     const u = unit.dataset.u!, lang = unit.dataset.lang as Lang
     setSel(null)
@@ -176,22 +203,25 @@ export default function App() {
         }
       }
       if (a.lang !== b.lang) { say('一次划线请在同一种语言里'); return }
-      const units = unitsOf(chap)
-      const ia = units.findIndex(u => u.id === a.u), ib = units.findIndex(u => u.id === b.u)
-      const parts: string[] = []
-      for (let i = ia; i <= ib; i++) {
-        const u = units[i]; const txt = a.lang === 'en' ? unitText(u.en) : u.zh
-        parts.push(txt.slice(i === ia ? a.o : 0, i === ib ? b.o : txt.length))
-      }
-      const text = parts.join(a.lang === 'en' ? ' ' : '').trim(); if (!text) return
+      const start = { u: a.u, o: a.o }, end = { u: b.u, o: b.o }
+      const text = textOf(unitsOf(chap), a.lang, start, end); if (!text) return
+      const over = hls.some(h => h.ch === chap.n && h.lang === a.lang && overlaps(h, start, end))
       const rect = r.getBoundingClientRect()
-      setSel({ x: rect.left + rect.width / 2, y: rect.top, lang: a.lang, start: { u: a.u, o: a.o }, end: { u: b.u, o: b.o }, text })
+      setSel({ x: rect.left + rect.width / 2, y: rect.top, lang: a.lang, start, end, text, over })
     }, 0)
   }
   const addHl = (color: string) => {
     if (!sel || !chap) return
-    setHls(h => [...h, { id: crypto.randomUUID(), lang: sel.lang, ch: chap.n, start: sel.start, end: sel.end, color, text: sel.text, created: Date.now() }])
+    if (sel.edit) setHls(h => h.map(x => (x.id === sel.edit ? { ...x, color } : x)))
+    else setHls(h => addMerged(h, unitsOf(chap), { lang: sel.lang, ch: chap.n, start: sel.start, end: sel.end, color }))
     getSelection()?.removeAllRanges(); setSel(null)
+  }
+  // 取消划线：点开的那条整条删掉；选中的一段则只擦掉选中部分
+  const eraseHl = () => {
+    if (!sel || !chap) return
+    if (sel.edit) setHls(h => h.filter(x => x.id !== sel.edit))
+    else setHls(h => erase(h, unitsOf(chap), chap.n, sel.lang, sel.start, sel.end))
+    getSelection()?.removeAllRanges(); setSel(null); say('已取消划线')
   }
 
   const onPage = useCallback(({ page, pages, unit }: { page: number; pages: number; unit: string | null }) => {
@@ -278,8 +308,12 @@ export default function App() {
 
       {sel && createPortal(
         <div className="sel-pop" style={{ left: sel.x, top: sel.y }} onMouseDown={e => e.preventDefault()}>
-          <span className="sp-l">{sel.lang === 'en' ? '划英文' : '划中文'}</span>
-          {COLORS.map(c => <button key={c} style={{ background: c }} onClick={() => addHl(c)} aria-label="划线" />)}
+          <span className="sp-l">{sel.edit ? '改颜色' : sel.lang === 'en' ? '划英文' : '划中文'}</span>
+          {COLORS.map(c => {
+            const cur = sel.edit && hls.find(x => x.id === sel.edit)?.color === c
+            return <button key={c} className={cur ? 'cur' : undefined} style={{ background: c }} onClick={() => addHl(c)} aria-label="划线" />
+          })}
+          {sel.over && <><i className="sp-sep" /><button className="sp-erase" onClick={eraseHl} aria-label="取消划线"><Eraser weight="bold" /><span>取消</span></button></>}
         </div>, document.body)}
 
       {toast && <div className="toast">{toast}</div>}
