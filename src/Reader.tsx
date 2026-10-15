@@ -36,13 +36,18 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
     }); ro.observe(el); return () => ro.disconnect()
   }, [])
 
-  const firstVisible = useCallback(() => {
-    const v = vp.current!.getBoundingClientRect()
+  // 找「从第 pg 页开始」的第一句。按句子相对 .flow 的位置算页，不看屏幕位置——
+  // 翻页有过渡动画，刚翻完时屏幕上还是上一页，按屏幕找会把锚点留在上一页，重排后就跳回去
+  const firstVisible = useCallback((pg: number) => {
+    const fr = flow.current!.getBoundingClientRect()
     for (const u of flow.current!.querySelectorAll<HTMLElement>('.unit')) {
-      for (const r of u.getClientRects()) if (r.right > v.left + 2 && r.left < v.right - 2 && r.bottom > v.top && r.top < v.bottom) return u.dataset.u!
+      const r = u.getClientRects()[0]; if (!r || !r.width) continue
+      const at = Math.floor((r.left - fr.left + 4) / step)
+      if (at === pg) return u.dataset.u!
+      if (at > pg) return null
     }
     return null
-  }, [])
+  }, [step])
 
   const pageOf = useCallback((u: string) => {
     const el = flow.current!.querySelector<HTMLElement>(`.unit[data-u="${u}"]`); if (!el) return null
@@ -71,7 +76,7 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      const u = firstVisible(); anchor.current = u
+      const u = firstVisible(page); anchor.current = u
       p.onPage({ page, pages, unit: u })
     })
     return () => cancelAnimationFrame(id)
