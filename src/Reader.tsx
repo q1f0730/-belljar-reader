@@ -87,15 +87,17 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
 
   const touch = useRef<{ x: number; y: number } | null>(null)
   return (
-    <div className="stage">
+    <div className="stage"
+      // 滑动翻页：整个页面都能滑（包括两侧翻页区），横向 40px 以上、且横向为主就翻
+      onTouchStart={e => { touch.current = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null }}
+      onTouchEnd={e => {
+        const t = touch.current; touch.current = null; if (!t) return
+        const dx = e.changedTouches[0].clientX - t.x, dy = e.changedTouches[0].clientY - t.y
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && !getSelection()?.toString()) { e.preventDefault(); dx < 0 ? next() : prev() }
+      }}>
       <button className="edge left" aria-label="上一页" onClick={prev} />
       <div className="viewport" ref={vp}
-        onScroll={e => { e.currentTarget.scrollLeft = 0; e.currentTarget.scrollTop = 0 }}
-        onTouchStart={e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
-        onTouchEnd={e => {
-          const t = touch.current; if (!t) return; const dx = e.changedTouches[0].clientX - t.x
-          if (Math.abs(dx) > 60 && Math.abs(e.changedTouches[0].clientY - t.y) < 60 && !getSelection()?.toString()) dx < 0 ? next() : prev()
-        }}>
+        onScroll={e => { e.currentTarget.scrollLeft = 0; e.currentTarget.scrollTop = 0 }}>
         <div ref={flow} className={`flow mode-${p.mode}`} onClick={p.onClick} onMouseUp={p.onMouseUp}
           style={{
             width: dim.w, height: dim.h, columnCount: cols, columnGap: GAP,

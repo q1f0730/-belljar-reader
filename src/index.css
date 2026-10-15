@@ -116,7 +116,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   animation: in-up .7s var(--out) .1s both;
 }
 @keyframes in-up { from { opacity: 0; transform: translateY(14px); } }
-.stage { flex: 1; position: relative; display: flex; min-height: 0; min-width: 0; padding: 48px clamp(28px, 5vw, 72px) 40px; }
+.stage { touch-action: pan-y pinch-zoom; flex: 1; position: relative; display: flex; min-height: 0; min-width: 0; padding: 48px clamp(28px, 5vw, 72px) 40px; }
 .viewport { flex: 1; min-width: 0; min-height: 0; overflow: hidden; overflow: clip; position: relative; }
 .flow {
   transition: transform .5s var(--out); column-fill: auto; line-height: 1.75; font-family: var(--serif);
@@ -311,9 +311,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .sheet-page { left: 10px; right: 10px; top: 60px; bottom: 76px; border-radius: 16px; }
   .sheet { left: 10px; right: 10px; width: auto; top: 60px; bottom: 76px; }
   .stage { padding: 28px 22px 24px; }
-  .edge { width: 22px; }
   .edge::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* 触屏：两侧窄条点一下翻页（也可左右滑），中间整页留给点句子 */
+@media (pointer: coarse) { .edge { width: 26px; } }

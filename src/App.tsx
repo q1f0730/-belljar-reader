@@ -146,6 +146,16 @@ export default function App() {
     setFlips(nf); say(h.lang === 'en' ? '已换回英文，划线重新出现' : '已换成中文，划线重新出现')
   }
 
+  // 放大点击范围：手指没正好点在字上（行间空隙、词与词之间），就在附近找最近的句子 / 单词
+  const near = (t: HTMLElement, sel: string, x: number, y: number, r: number) => {
+    const hit = t.closest<HTMLElement>(sel); if (hit) return hit
+    const ds = [0, -r / 3, r / 3, -r * 2 / 3, r * 2 / 3, -r, r]
+    for (const dy of ds) for (const dx of ds) {
+      const el = document.elementFromPoint(x + dx, y + dy) as HTMLElement | null
+      const h = el?.closest<HTMLElement>(sel); if (h && h.closest('.flow')) return h
+    }
+    return null
+  }
   const onClick = async (e: React.MouseEvent) => {
     if (getSelection()?.toString()) return
     const t = e.target as HTMLElement
@@ -158,7 +168,7 @@ export default function App() {
       const h = hls.find(x => x.id === hel.dataset.hid)
       if (h) { const r = hel.getBoundingClientRect(); setBubble(null); setSel({ x: r.left + r.width / 2, y: r.top, lang: h.lang, start: h.start, end: h.end, text: h.text, over: true, edit: h.id }); return }
     }
-    const unit = t.closest<HTMLElement>('.unit'); if (!unit || eff === 'none') { setBubble(null); return }
+    const unit = eff === 'none' ? null : near(t, '.unit', e.clientX, e.clientY, 18); if (!unit) { setBubble(null); return }
     const u = unit.dataset.u!, lang = unit.dataset.lang as Lang
     setSel(null)
     if (eff === 'sentence' || lang === 'zh') {
@@ -168,7 +178,7 @@ export default function App() {
       setBubble(null); return
     }
     // 单词模式
-    const w = t.closest<HTMLElement>('.w'); if (!w) { setBubble(null); return }
+    const w0 = near(t, '.w', e.clientX, e.clientY, 12); const w = w0 && unit.contains(w0) ? w0 : null; if (!w) { setBubble(null); return }
     const key = `${u}:${w.dataset.o}`
     if (glosses.has(key) && (bubble as Bubble | null)?.key === key) {
       const g = new Map(glosses); g.delete(key); setGlosses(g); setBubble(null); return
