@@ -288,14 +288,15 @@ export default function App() {
         }}
         onImport={async f => { try { await store.importAll(JSON.parse(await f.text())); location.reload() } catch (e) { say(String((e as Error).message)) } }}
       />
-      <header className="topbar">
+      <main className={'sheet-page' + (panel && panel !== 'tr' ? ' shifted' : '')}>
+      {/* 顶部信息条：放在阅读页顶端中间，鼠标移到这条区域才显示 */}
+      <div className="tb-zone"><header className="topbar">
         <span className="tb-book">The Bell Jar</span>
         <i className="tb-sep" />
         <span className="tb-ch">{chap ? `Chapter ${chap.n}` : '…'}</span>
         <span className="tb-page mono">{info.page + 1} / {info.pages}</span>
         <span className={'tb-mode' + (baseZh ? ' zh' : '')} key={`${baseZh}${mode}`}>{baseZh ? '全文中文' : mode === 'word' ? '单词翻译' : '逐句翻译'}</span>
-      </header>
-      <main className={'sheet-page' + (panel && panel !== 'tr' ? ' shifted' : '')}>
+      </header></div>
         {err && <div className="wall small">{err}</div>}
         {chap ? (
           <Reader ref={reader} chapter={chap} langOf={langOf} base={baseZh ? 'zh' : 'en'} mode={eff} glosses={glosses} active={bubble?.kind === 'word' ? bubble.key : null}
