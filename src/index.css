@@ -333,13 +333,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .app.with-side .tools:hover, .app.with-side .tools:has(:focus-visible) { opacity: 1; transform: translate(0, -50%); }
 .app.with-side .sheet { left: 84px; }
 
-.side {
+.rpanel {
   position: fixed; right: 20px; top: 20px; bottom: 20px; width: min(420px, 34vw); z-index: 34; display: flex; flex-direction: column;
   background: var(--sheet); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden;
   animation: side-in .45s var(--out);
 }
 @keyframes side-in { from { opacity: 0; transform: translateX(16px); } }
-.side > header { display: flex; align-items: center; gap: 8px; padding: 12px 12px 12px 14px; border-bottom: 1px solid var(--line); }
+.rpanel > header { display: flex; align-items: center; gap: 8px; padding: 12px 12px 12px 14px; border-bottom: 1px solid var(--line); }
 .side-tabs { display: flex; gap: 2px; padding: 3px; background: var(--hover); border-radius: 10px; }
 .side-tabs button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 6px 12px; border-radius: 8px; font-weight: 500; color: var(--ink-2); transition: background .2s, color .2s; }
 .side-tabs button.on { background: var(--sheet); color: var(--ink); box-shadow: 0 1px 3px rgba(24,24,27,.12); }
@@ -418,15 +418,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .app.with-side .sheet-page { left: 10px; right: 10px; }
   .app.with-side .tools { opacity: 1; transform: translateX(-50%); }
   .app.with-side .tools::before { display: none; }
-  .side { left: 10px; right: 10px; top: 10px; bottom: 76px; width: auto; z-index: 45; }
+  .rpanel { left: 10px; right: 10px; top: 10px; bottom: 76px; width: auto; z-index: 45; }
 }
 
 /* —— 第二版：去掉标签，留白更多，输入框更小 —— */
-.side { width: min(400px, 32vw); }
+.rpanel { width: min(400px, 32vw); }
 .app.with-side .sheet-page { right: calc(min(400px, 32vw) + 40px); }
-.side > header { padding: 14px 14px 14px 22px; border-bottom: 0; }
-.side > header h3 { flex: 1; margin: 0; font: 600 14.5px var(--sans); letter-spacing: -.01em; }
-.side > header > .icon-btn { margin-left: 4px; }
+.rpanel > header { padding: 14px 14px 14px 22px; border-bottom: 0; }
+.rpanel > header h3 { flex: 1; margin: 0; font: 600 14.5px var(--sans); letter-spacing: -.01em; }
+.rpanel > header > .icon-btn { margin-left: 4px; }
 .chat-acts { position: relative; display: flex; gap: 2px; }
 .chat-acts .icon-btn { margin: 0; width: 30px; height: 30px; font-size: 16px; }
 .chat-acts .icon-btn.on { background: var(--hover); color: var(--ink); }
@@ -471,7 +471,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .note-list { padding: 4px 22px 24px; gap: 12px; }
 .note-text { font-size: 13.5px; }
 @media (max-width: 760px) {
-  .side { width: auto; }
+  .rpanel { width: auto; }
   .app.with-side .sheet-page { right: 10px; }
   .history { width: min(280px, calc(100vw - 40px)); }
 }

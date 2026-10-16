@@ -17,7 +17,7 @@ interface Props {
 export function SidePanel(p: Props) {
   if (!p.side) return null
   return (
-    <aside className="side" aria-label={p.side === 'ai' ? 'AI 对话' : '笔记'}>
+    <aside className="rpanel" aria-label={p.side === 'ai' ? 'AI 对话' : '笔记'}>
       <header>
         <h3>{p.side === 'ai' ? 'AI 对话' : '笔记'}</h3>
         {p.side === 'ai' && p.user && <ChatActions {...p} />}
