@@ -1,5 +1,7 @@
-import { BookOpenText, Translate, Highlighter, GearSix, X, DownloadSimple, UploadSimple, Sun, Moon } from '@phosphor-icons/react'
+import { BookOpenText, Translate, Highlighter, GearSix, X, DownloadSimple, UploadSimple, Sun, Moon, NotePencil, Sparkle, UserCircle, SignOut, CloudCheck, CloudArrowUp, CloudWarning } from '@phosphor-icons/react'
 import type { Highlight, Mode, Prefs, Toc } from './types'
+import type { User } from './account'
+import type { Side } from './SidePanel'
 
 export type Panel = 'toc' | 'tr' | 'marks' | 'set' | null
 interface Props {
@@ -9,6 +11,7 @@ interface Props {
   hls: Highlight[]; goHl(h: Highlight): void; delHl(id: string): void; noteHl(id: string, note: string): void
   prefs: Prefs; setPrefs(p: Prefs): void; persisted: boolean
   onExport(): void; onImport(f: File): void
+  side: Side; setSide(s: Side): void; user: User | null; syncState: 'idle' | 'saving' | 'error'; onAccount(): void; onLogout(): void
 }
 
 const MODES: { k: 'word' | 'sentence' | 'full'; ch: string; t: string; d: string }[] = [
@@ -44,8 +47,13 @@ export function Sidebar(p: Props) {
           </div>
         </div>
         <Tool on={p.panel === 'marks'} label="划线与笔记" onClick={() => tog('marks')} count={p.hls.length}><Highlighter weight="bold" /></Tool>
+        <Tool on={p.side === 'notes'} label="笔记" onClick={() => p.setSide(p.side === 'notes' ? null : 'notes')}><NotePencil weight="bold" /></Tool>
+        <Tool on={p.side === 'ai'} label="AI 对话" onClick={() => p.setSide(p.side === 'ai' ? null : 'ai')}><Sparkle weight="bold" /></Tool>
         <i className="tools-sep" />
         <Tool on={p.panel === 'set'} label="设置" onClick={() => tog('set')}><GearSix weight="bold" /></Tool>
+        <Tool on={false} label={p.user ? `账号：${p.user.name}` : '登录 / 注册'} onClick={p.onAccount} dot={!p.user}>
+          {p.user ? <span className="avatar">{p.user.name.slice(0, 1).toUpperCase()}</span> : <UserCircle weight="bold" />}
+        </Tool>
       </nav>
 
       {p.panel === 'toc' && p.toc && (
@@ -62,7 +70,8 @@ export function Sidebar(p: Props) {
 
       {p.panel === 'marks' && (
         <Sheet title="划线" sub={`${p.hls.length} 条`} onClose={() => p.setPanel(null)}>
-          {!p.hls.length && (
+          {!p.user && <div className="empty"><p>登录后才能划线。</p><button className="btn primary" onClick={p.onAccount}>登录 / 注册</button></div>}
+          {p.user && !p.hls.length && (
             <div className="empty">
               <span className="empty-mark"><span className="hl" style={{ ['--c' as string]: '#F5D77A' }}>选中一段文字</span></span>
               <p>英文、中文都能划。句子换成另一种语言时，划线会收成一个小点。</p>
@@ -103,8 +112,25 @@ export function Sidebar(p: Props) {
             </div>
           </div>
           <div className="field">
+            <label>账号</label>
+            {p.user ? (
+              <>
+                <p className="note acct">
+                  <span className="avatar">{p.user.name.slice(0, 1).toUpperCase()}</span><b>{p.user.name}</b>
+                  <span className={'sync ' + p.syncState}>{p.syncState === 'saving' ? <><CloudArrowUp weight="bold" />同步中</> : p.syncState === 'error' ? <><CloudWarning weight="bold" />同步失败，稍后自动重试</> : <><CloudCheck weight="bold" />已同步</>}</span>
+                </p>
+                <div className="btn-row"><button className="btn" onClick={p.onLogout}><SignOut weight="bold" />退出登录</button></div>
+              </>
+            ) : (
+              <>
+                <p className="note">登录后可以划线、写笔记、和 AI 讨论，数据自动同步，只有你自己看得到。</p>
+                <div className="btn-row"><button className="btn primary" onClick={p.onAccount}><UserCircle weight="bold" />登录 / 注册</button></div>
+              </>
+            )}
+          </div>
+          <div className="field">
             <label>本机数据</label>
-            <p className="note">进度、划线和笔记存在这台设备的浏览器里。{p.persisted ? '已获得持久存储。' : '浏览器暂未授予持久存储，建议定期导出备份。'}</p>
+            <p className="note">阅读进度和设置存在这台设备的浏览器里{p.user ? '，划线、笔记和对话另外同步到账号' : ''}。{p.persisted ? '已获得持久存储。' : '建议定期导出备份。'}</p>
             <div className="btn-row">
               <button className="btn" onClick={p.onExport}><DownloadSimple weight="bold" />导出备份</button>
               <label className="btn">

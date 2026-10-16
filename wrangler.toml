@@ -13,3 +13,14 @@ id = "832b6d4a049346ad945ed369b0f94885"
 [[kv_namespaces]]
 binding = "SITE"
 id = "947726edbcd242aa8b895940546d62b5"
+
+# 账号、会话、划线/笔记/AI 对话同步数据
+[[d1_databases]]
+binding = "DB"
+database_name = "belljar-users"
+database_id = "47f7ca7b-4078-4f17-a7b2-0b10f2f6a601"
+
+# AI：千问 OpenAI 兼容接口。QWEN_API_KEY 是 Worker Secret（在 Cloudflare 后台设置，不进仓库）
+[vars]
+QWEN_BASE = "https://maas.qianwenaiapi.com/compatible-mode/v1"
+QWEN_MODEL = "qwen3.8-max-0902"

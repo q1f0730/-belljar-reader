@@ -21,4 +21,5 @@ function localBook(): Plugin {
   }
 }
 
-export default defineConfig({ plugins: [react(), localBook()] })
+// 账号/同步/AI 走本地 wrangler dev（npx wrangler dev --port 8787）
+export default defineConfig({ plugins: [react(), localBook()], server: { proxy: { '^/api/(auth|sync|ai)': 'http://localhost:8787' } } })

@@ -27,3 +27,4 @@ dist-ssr
 private/
 *.epub
 .wrangler/
+.dev.vars
