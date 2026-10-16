@@ -2,7 +2,7 @@
 // 这样两台设备合并时，删掉的东西不会被另一台"复活"。
 export interface User { name: string }
 export interface Note { id: string; text: string; ch?: number; unit?: string; quote?: string; created: number; upd: number }
-export interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; at: number; quote?: string }
+export interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; at: number; quote?: string; conv?: string } // conv：所属对话，旧数据没有则归到 'legacy'
 export type SyncKind = 'highlights' | 'notes' | 'chats'
 export interface Doc<T> { items: T[]; del: Record<string, number> }
 

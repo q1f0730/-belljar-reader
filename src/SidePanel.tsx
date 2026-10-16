@@ -1,6 +1,6 @@
 // 右侧面板：笔记 / AI 对话。打开时阅读页左移，左侧工具栏收起（悬停才出现）。
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { X, PaperPlaneRight, Stop, Trash, NotePencil, Sparkle, Quotes, ArrowSquareOut } from '@phosphor-icons/react'
+import { X, ArrowUp, Stop, Trash, Sparkle, Quotes, ArrowSquareOut, PlusCircle, ClockCounterClockwise } from '@phosphor-icons/react'
 import type { ChatMsg, Note, User } from './account'
 
 export type Side = 'notes' | 'ai' | null
@@ -9,7 +9,8 @@ interface Props {
   side: Side; setSide(s: Side): void; user: User | null; onLogin(): void
   notes: Note[]; addNote(text: string, quote?: string): void; editNote(id: string, text: string): void; delNote(id: string): void; goNote(n: Note): void
   draftQuote: { text: string; for: 'notes' | 'ai' } | null; clearQuote(): void
-  chats: ChatMsg[]; sendChat(text: string, quote?: string): void; stopChat(): void; clearChats(): void; busy: boolean
+  chats: ChatMsg[]; sendChat(text: string, quote?: string): void; stopChat(): void; busy: boolean
+  conv: string; setConv(id: string): void; newConv(): void; delConv(id: string): void
   ch: number
 }
 
@@ -18,10 +19,8 @@ export function SidePanel(p: Props) {
   return (
     <aside className="side" aria-label={p.side === 'ai' ? 'AI 对话' : '笔记'}>
       <header>
-        <div className="side-tabs" role="tablist">
-          <button role="tab" aria-selected={p.side === 'notes'} className={p.side === 'notes' ? 'on' : ''} onClick={() => p.setSide('notes')}><NotePencil weight="bold" />笔记</button>
-          <button role="tab" aria-selected={p.side === 'ai'} className={p.side === 'ai' ? 'on' : ''} onClick={() => p.setSide('ai')}><Sparkle weight="bold" />AI 对话</button>
-        </div>
+        <h3>{p.side === 'ai' ? 'AI 对话' : '笔记'}</h3>
+        {p.side === 'ai' && p.user && <ChatActions {...p} />}
         <button className="icon-btn" onClick={() => p.setSide(null)} aria-label="关闭"><X weight="bold" /></button>
       </header>
       {!p.user ? (
@@ -49,9 +48,9 @@ function Notes(p: Props) {
     <div className="side-body notes">
       <div className="composer">
         {quote && <Quote text={quote} onClear={p.clearQuote} />}
-        <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder={`在第 ${p.ch} 章写点想法…（Ctrl+Enter 保存）`} rows={3}
+        <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder={`在第 ${p.ch} 章写点想法…`} rows={2}
           onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save() } }} maxLength={5000} />
-        <div className="composer-row"><small>{text.length ? `${text.length} 字` : '会记下当前位置，点笔记可跳回去'}</small><button className="btn primary sm" disabled={!text.trim() && !quote} onClick={save}>保存</button></div>
+        <div className="composer-row"><small>{text.length ? `${text.length} 字 · Ctrl+Enter 保存` : '会记下当前位置'}</small><button className="btn primary sm" disabled={!text.trim() && !quote} onClick={save}>保存</button></div>
       </div>
       {!list.length && <div className="empty"><p>还没有笔记。选中一段文字，点「记笔记」，也能把它引用进来。</p></div>}
       <ul className="note-list">
@@ -84,6 +83,57 @@ function AutoText({ value, onChange, onBlur }: { value: string; onChange(v: stri
   return <textarea ref={r} className="note-text" value={value} rows={1} onChange={e => onChange(e.target.value)} onBlur={onBlur} placeholder="（空）" maxLength={5000} />
 }
 
+// 对话列表：按对话分组，标题取第一句提问，按最近一条消息排序
+export function convsOf(chats: ChatMsg[]) {
+  const m = new Map<string, { id: string; title: string; last: number; n: number }>()
+  for (const c of chats) {
+    const id = c.conv || 'legacy'; const e = m.get(id) ?? { id, title: '', last: 0, n: 0 }
+    if (!e.title && c.role === 'user') e.title = c.content.slice(0, 40)
+    e.last = Math.max(e.last, c.at); e.n++; m.set(id, e)
+  }
+  return [...m.values()].sort((a, b) => b.last - a.last)
+}
+const when = (t: number) => {
+  const d = new Date(t), now = new Date()
+  if (d.toDateString() === now.toDateString()) return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+function ChatActions(p: Props) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const f = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', f); document.addEventListener('keydown', k)
+    return () => { document.removeEventListener('mousedown', f); document.removeEventListener('keydown', k) }
+  }, [open])
+  const list = convsOf(p.chats)
+  return (
+    <div className="chat-acts" ref={ref}>
+      <button className="icon-btn" onClick={p.newConv} disabled={p.busy} aria-label="新对话" title="新对话"><PlusCircle weight="bold" /></button>
+      <button className={'icon-btn' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)} aria-label="历史记录" aria-expanded={open} title="历史记录"><ClockCounterClockwise weight="bold" /></button>
+      {open && (
+        <div className="history" role="menu">
+          <div className="history-h">历史记录<small>{list.length} 个对话</small></div>
+          {!list.length && <p className="history-empty">还没有对话</p>}
+          <ul>
+            {list.map(c => (
+              <li key={c.id} className={c.id === p.conv ? 'on' : ''}>
+                <button className="history-go" disabled={p.busy} onClick={() => { p.setConv(c.id); setOpen(false) }}>
+                  <span>{c.title || '（无标题）'}</span><small>{when(c.last)}</small>
+                </button>
+                <button className="history-del" aria-label="删除这个对话" onClick={() => { if (confirm('删除这个对话？')) p.delConv(c.id) }}><Trash weight="bold" /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SUGGEST = ['这一页在讲什么？', '这一页有哪些难懂的句子？', '主人公现在是什么心情？', '这一章的背景知识']
 
 function Chat(p: Props) {
@@ -94,19 +144,21 @@ function Chat(p: Props) {
   useEffect(() => { if (quote) ta.current?.focus() }, [quote])
   // 新消息时滚到底（用户往上翻看旧消息时不打扰）
   const stick = useRef(true)
-  useLayoutEffect(() => { const el = box.current; if (el && stick.current) el.scrollTop = el.scrollHeight }, [p.chats])
+  const msgs = p.chats.filter(m => (m.conv || 'legacy') === p.conv)
+  useLayoutEffect(() => { const el = box.current; if (el && stick.current) el.scrollTop = el.scrollHeight }, [p.chats, p.conv])
+  useLayoutEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 132) + 'px' }, [text])
   const send = (t = text) => { const s = t.trim(); if (!s || p.busy) return; p.sendChat(s, quote); setText(''); p.clearQuote(); stick.current = true }
   return (
     <div className="side-body chat">
       <div className="msgs" ref={box} onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40 }}>
-        {!p.chats.length && (
+        {!msgs.length && (
           <div className="chat-empty">
             <Sparkle weight="duotone" />
             <p>问我这本书的任何问题：句子看不懂、人物在想什么、背景典故……我会结合你正在读的这一页来回答。</p>
             <div className="chips">{SUGGEST.map(s => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
           </div>
         )}
-        {p.chats.map(m => (
+        {msgs.map(m => (
           <div key={m.id} className={'msg ' + m.role}>
             {m.quote && <blockquote>{m.quote}</blockquote>}
             {m.role === 'assistant' ? <Md text={m.content || (p.busy ? '…' : '')} /> : <p>{m.content}</p>}
@@ -115,13 +167,12 @@ function Chat(p: Props) {
       </div>
       <div className="composer">
         {quote && <Quote text={quote} onClear={p.clearQuote} />}
-        <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} rows={2} maxLength={2000} placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} />
-        <div className="composer-row">
-          {p.chats.length ? <button className="link" onClick={() => { if (confirm('清空所有对话？')) p.clearChats() }}>清空对话</button> : <small>AI 会看到你当前这一页</small>}
+        <div className="pill">
+          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} rows={1} maxLength={2000} placeholder="问点什么…"
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} />
           {p.busy
-            ? <button className="btn sm" onClick={p.stopChat}><Stop weight="fill" />停止</button>
-            : <button className="btn primary sm" disabled={!text.trim()} onClick={() => send()}><PaperPlaneRight weight="fill" />发送</button>}
+            ? <button className="send stop" onClick={p.stopChat} aria-label="停止" title="停止"><Stop weight="fill" /></button>
+            : <button className="send" disabled={!text.trim()} onClick={() => send()} aria-label="发送" title="发送（Enter）"><ArrowUp weight="bold" /></button>}
         </div>
       </div>
     </div>

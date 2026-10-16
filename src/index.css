@@ -420,3 +420,58 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .app.with-side .tools::before { display: none; }
   .side { left: 10px; right: 10px; top: 10px; bottom: 76px; width: auto; z-index: 45; }
 }
+
+/* —— 第二版：去掉标签，留白更多，输入框更小 —— */
+.side { width: min(400px, 32vw); }
+.app.with-side .sheet-page { right: calc(min(400px, 32vw) + 40px); }
+.side > header { padding: 14px 14px 14px 22px; border-bottom: 0; }
+.side > header h3 { flex: 1; margin: 0; font: 600 14.5px var(--sans); letter-spacing: -.01em; }
+.side > header > .icon-btn { margin-left: 4px; }
+.chat-acts { position: relative; display: flex; gap: 2px; }
+.chat-acts .icon-btn { margin: 0; width: 30px; height: 30px; font-size: 16px; }
+.chat-acts .icon-btn.on { background: var(--hover); color: var(--ink); }
+.chat-acts .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.history {
+  position: absolute; right: 0; top: calc(100% + 8px); width: 280px; max-height: min(420px, 60vh); z-index: 5; display: flex; flex-direction: column;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden;
+  transform-origin: top right; animation: drop .28s var(--out);
+}
+@keyframes drop { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+.history-h { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 14px 8px; font-weight: 600; }
+.history-h small { font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
+.history-empty { margin: 0; padding: 4px 14px 16px; color: var(--ink-3); }
+.history ul { list-style: none; margin: 0; padding: 0 6px 6px; overflow: auto; }
+.history li { position: relative; border-radius: 10px; }
+.history li:hover, .history li.on { background: var(--hover); }
+.history-go { width: 100%; display: flex; align-items: baseline; gap: 10px; border: 0; background: none; padding: 9px 34px 9px 10px; text-align: left; }
+.history-go span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.history-go small { flex: none; color: var(--ink-3); font: 11px var(--mono); }
+.history li.on .history-go span { font-weight: 600; }
+.history-del { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--ink-3); opacity: 0; transition: opacity .15s; }
+.history li:hover .history-del, .history-del:focus-visible { opacity: 1; }
+.history-del:hover { color: var(--accent); }
+
+.chat .msgs { padding: 8px 22px 20px; gap: 18px; }
+.msg { font-size: 13.5px; line-height: 1.75; }
+.msg.user { padding: 7px 13px; border-radius: 14px 14px 4px 14px; max-width: 85%; }
+.chat-empty { padding: 0 18px; font-size: 13px; }
+.chat-empty > svg { font-size: 26px; margin-bottom: 4px; }
+.chips { gap: 8px; margin-top: 16px; }
+.chips button { font-size: 12px; padding: 6px 12px; color: var(--ink-2); }
+.chat .composer { border-top: 0; padding: 8px 16px 16px; }
+.pill { display: flex; align-items: flex-end; gap: 6px; padding: 5px 5px 5px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--sheet); transition: border-color .15s, box-shadow .15s; }
+.pill:focus-within { border-color: var(--ink-3); box-shadow: 0 0 0 3px var(--hover); }
+.pill textarea { flex: 1; border: 0 !important; box-shadow: none !important; padding: 6px 0 !important; border-radius: 0 !important; font: 13.5px/1.5 var(--sans) !important; min-height: 20px; max-height: 132px; resize: none; background: transparent; outline: none; color: var(--ink); }
+.send { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--ink); color: var(--sheet); font-size: 15px; transition: opacity .15s, transform .15s; }
+.send:disabled { opacity: .18; cursor: not-allowed; }
+.send:not(:disabled):active { transform: scale(.92); }
+.send.stop { background: var(--accent); color: #fff; font-size: 12px; }
+.notes .composer { padding: 4px 22px 14px; border-bottom: 0; }
+.notes .composer textarea { font-size: 13.5px; padding: 9px 12px; }
+.note-list { padding: 4px 22px 24px; gap: 12px; }
+.note-text { font-size: 13.5px; }
+@media (max-width: 760px) {
+  .side { width: auto; }
+  .app.with-side .sheet-page { right: 10px; }
+  .history { width: min(280px, calc(100vw - 40px)); }
+}

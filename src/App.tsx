@@ -49,6 +49,7 @@ export default function App() {
   const [side, setSide] = useState<Side>(null)
   const [notes, setNotes] = useState<Note[]>([])
   const [chats, setChats] = useState<ChatMsg[]>([])
+  const [conv, setConv] = useState<string>(() => crypto.randomUUID()) // 当前对话；新对话 = 新 id，还没有消息
   const [busy, setBusy] = useState(false)
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'error'>('idle')
   const [draftQuote, setDraftQuote] = useState<{ text: string; for: 'notes' | 'ai' } | null>(null)
@@ -119,8 +120,9 @@ export default function App() {
     if (busy) return
     const um: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: text, quote, at: Date.now() }
     const am: ChatMsg = { id: crypto.randomUUID(), role: 'assistant', content: '', at: Date.now() + 1 }
-    const history = [...chatsRef.current, um]
-    setChats([...history, am]); setBusy(true)
+    um.conv = am.conv = conv
+    const history = [...chatsRef.current.filter(m => (m.conv || 'legacy') === conv), um]
+    setChats(cs => [...cs, um, am]); setBusy(true)
     const ctl = new AbortController(); abort.current = ctl
     let acc = ''
     try {
@@ -146,7 +148,8 @@ export default function App() {
       if (m) setModeS(m)
       if (t === false) setTrOn(false)
       setStartAt({ unit: prog?.unit }); setCh(prog?.ch || 1)
-      const [n, c] = await Promise.all([store.get<Note[]>('notes'), store.get<ChatMsg[]>('chats')])
+      const [n, c, cv] = await Promise.all([store.get<Note[]>('notes'), store.get<ChatMsg[]>('chats'), store.get<string>('conv')])
+      if (cv) setConv(cv)
       const u = await acct.me()
       if (u) await startSync(u, h || [], n || [], c || [])
       setReady(true)
@@ -165,6 +168,7 @@ export default function App() {
   useEffect(() => { if (ready) store.set('highlights', hls) }, [hls, ready])
   useEffect(() => { if (ready) store.set('notes', notes) }, [notes, ready])
   useEffect(() => { if (ready) store.set('chats', chats) }, [chats, ready])
+  useEffect(() => { if (ready) store.set('conv', conv) }, [conv, ready])
   // 登录状态下，本机改动自动推到服务器（AI 回答流式输出时等它说完再推）
   useEffect(() => { if (user && synced.current) sy.current!.highlights.push(hls) }, [hls, user])
   useEffect(() => { if (user && synced.current) sy.current!.notes.push(notes) }, [notes, user])
@@ -474,7 +478,7 @@ export default function App() {
       <SidePanel side={side} setSide={setSide} user={user} onLogin={() => setAuthFor('')}
         notes={notes} addNote={addNote} editNote={editNote} delNote={delNote} goNote={n => n.ch && goCh(n.ch, { unit: n.unit })}
         draftQuote={draftQuote} clearQuote={() => setDraftQuote(null)}
-        chats={chats} sendChat={sendChat} stopChat={() => abort.current?.abort()} clearChats={() => setChats([])} busy={busy} ch={chap?.n || ch} />
+        chats={chats} sendChat={sendChat} stopChat={() => abort.current?.abort()} conv={conv} setConv={c => { if (!busy) setConv(c) }} newConv={() => { if (!busy) setConv(crypto.randomUUID()) }} delConv={id => { setChats(cs => cs.filter(m => (m.conv || 'legacy') !== id)); if (id === conv) setConv(crypto.randomUUID()) }} busy={busy} ch={chap?.n || ch} />
       {authFor !== null && <Auth reason={authFor || undefined} onDone={onLogin} onClose={() => setAuthFor(null)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
