@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { Chapter, Highlight, Lang, Mode } from './types'
 import { UnitView } from './Unit'
+import { PageFlip } from './rw'
 
 export interface ReaderHandle { next(): void; prev(): void; goUnit(u: string): void }
 interface Props {
@@ -22,6 +23,7 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
   const [dim, setDim] = useState({ w: 0, h: 0 })
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
+  const [turn, setTurn] = useState<{ n: number; dir: 1 | -1 }>({ n: 0, dir: 1 })
   const anchor = useRef<string | null>(null)
   const laid = useRef(0) // 已完成分页的章节号；未分页前不响应翻页，避免连跳章节
   const pending = useRef<{ unit?: string; end?: boolean } | null>(p.startAt)
@@ -83,8 +85,8 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pages, p.chapter])
 
-  const next = useCallback(() => { if (laid.current !== p.chapter.n) return; if (page < pages - 1) { anchor.current = null; setPage(page + 1) } else p.onEdge(1) }, [page, pages, p])
-  const prev = useCallback(() => { if (laid.current !== p.chapter.n) return; if (page > 0) { anchor.current = null; setPage(page - 1) } else p.onEdge(-1) }, [page, p])
+  const next = useCallback(() => { if (laid.current !== p.chapter.n) return; if (page < pages - 1) { anchor.current = null; setPage(page + 1); setTurn(t => ({ n: t.n + 1, dir: 1 })) } else p.onEdge(1) }, [page, pages, p])
+  const prev = useCallback(() => { if (laid.current !== p.chapter.n) return; if (page > 0) { anchor.current = null; setPage(page - 1); setTurn(t => ({ n: t.n + 1, dir: -1 })) } else p.onEdge(-1) }, [page, p])
   useImperativeHandle(ref, () => ({
     next, prev,
     goUnit(u) { const t = pageOf(u); if (t !== null) setPage(t) },
@@ -123,6 +125,7 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
           <div className="ch-end"><i /></div>
         </div>
       </div>
+      <div className="flip-wrap" aria-hidden><PageFlip turn={turn} /></div>
       <button className="edge right" aria-label="下一页" onClick={next} />
     </div>
   )

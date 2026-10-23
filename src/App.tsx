@@ -13,6 +13,7 @@ import * as acct from './account'
 import type { ChatMsg, Note, User } from './account'
 import { SidePanel, type Side } from './SidePanel'
 import { Auth } from './Auth'
+import { PageSkeleton } from './rw'
 
 const COLORS = ['#F5D77A', '#F4A3A3', '#9CC8F0', '#A8D5AE']
 const DEF_PREFS: Prefs = { fontSize: 19, theme: 'paper', spread: 'auto' }
@@ -437,7 +438,7 @@ export default function App() {
           <Reader ref={reader} chapter={chap} langOf={langOf} base={baseZh ? 'zh' : 'en'} mode={eff} glosses={glosses} active={bubble?.kind === 'word' ? bubble.key : null}
             hls={chHls} fontSize={prefs.fontSize} single={prefs.spread === 'single'} layoutKey={layoutKey} startAt={startAt}
             onEdge={d => goCh(ch + d, d === -1 ? { end: true } : {})} onPage={onPage} onClick={onClick} onMouseUp={onMouseUp} />
-        ) : <div className="skeleton">{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ width: `${92 - (i % 3) * 14}%` }} />)}</div>}
+        ) : <PageSkeleton />}
         <div className="progress" role="progressbar" aria-label="全书进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} title={`全书 ${Math.round(pct)}%`}><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
       </main>
 

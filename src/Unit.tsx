@@ -1,3 +1,4 @@
+import { LiquidLine } from './rw'
 import { memo } from 'react'
 import type { Highlight, Lang, Unit as U } from './types'
 import { tokens, cmpUnit, unitText } from './text'
@@ -62,6 +63,7 @@ export const UnitView = memo(function UnitView({ unit, lang, tr, glosses, hls, a
           <span key={t.o} className={'gw' + (active === key ? ' on' : '')} data-g={key}>
             <span className="gl" aria-hidden>{g}</span>
             <span data-o={t.o} data-l="en" data-hid={h?.id} className={h ? 'w hl' : 'w'} style={style}>{t.s}</span>
+            <LiquidLine on={active === key} />
           </span>
         )
       })}

@@ -1,7 +1,9 @@
-import { BookOpenText, Translate, Highlighter, GearSix, X, DownloadSimple, UploadSimple, Sun, Moon, NotePencil, Sparkle, UserCircle, SignOut, CloudCheck, CloudArrowUp, CloudWarning } from '@phosphor-icons/react'
+import { BookOpenText, Translate, Highlighter, GearSix, X, DownloadSimple, UploadSimple, NotePencil, Sparkle, UserCircle, SignOut, CloudCheck, CloudArrowUp, CloudWarning } from '@phosphor-icons/react'
 import type { Highlight, Mode, Prefs, Toc } from './types'
 import type { User } from './account'
 import type { Side } from './SidePanel'
+import { Dock, DockItem, PillIndicator, KineticLens, ThemeToggle, ShimmerButton, FolderCard } from './rw'
+import { AnimatePresence } from 'framer-motion'
 
 export type Panel = 'toc' | 'tr' | 'marks' | 'set' | null
 interface Props {
@@ -25,7 +27,7 @@ export function Sidebar(p: Props) {
   const trOn = p.panel === 'tr' // 子菜单是否展开
   return (
     <>
-      <nav className="tools" aria-label="工具">
+      <Dock className="tools" label="工具">
         <Tool on={p.panel === 'toc'} label="目录" onClick={() => tog('toc')}><BookOpenText weight="bold" /></Tool>
         <div className="tool-wrap">
           <Tool on={p.trOn} label={p.trOn ? '翻译（再点关闭）' : '翻译'} onClick={p.toggleTr}><Translate weight="bold" /></Tool>
@@ -39,6 +41,7 @@ export function Sidebar(p: Props) {
                   disabled={off} aria-disabled={off}
                   className={'sub-btn' + (on ? ' on' : '') + (off ? ' off' : '')} style={{ ['--i' as string]: i }}
                   onClick={() => (m.k === 'full' ? p.toggleFull() : p.setMode(m.k))}>
+                  {on && <PillIndicator id="mode-pill" />}
                   <span className="sub-ch">{m.ch}</span>
                   <span className="tip"><b>{m.k === 'full' && p.baseZh ? '切回英文' : m.t}</b>{off ? '全文中文时不可用' : m.d}</span>
                 </button>
@@ -54,41 +57,37 @@ export function Sidebar(p: Props) {
         <Tool on={false} label={p.user ? `账号：${p.user.name}` : '登录 / 注册'} onClick={p.onAccount} dot={!p.user}>
           {p.user ? <span className="avatar">{p.user.name.slice(0, 1).toUpperCase()}</span> : <UserCircle weight="bold" />}
         </Tool>
-      </nav>
+      </Dock>
 
       {p.panel === 'toc' && p.toc && (
         <Sheet title={p.toc.title} sub={p.toc.author} onClose={() => p.setPanel(null)}>
-          <ol className="toc">
-            {p.toc.chapters.map((c, i) => (
-              <li key={c.n} className={c.n === p.ch ? 'on' : ''} style={{ ['--i' as string]: i }}>
-                <button onClick={() => p.goCh(c.n)}><b>{String(c.n).padStart(2, '0')}</b><span>{c.en}</span><i>{c.zh}</i></button>
-              </li>
-            ))}
-          </ol>
+          <KineticLens active={p.ch} onPick={p.goCh}
+            items={p.toc.chapters.map(c => ({ key: c.n, num: String(c.n).padStart(2, '0'), title: c.en, sub: c.zh }))} />
         </Sheet>
       )}
 
       {p.panel === 'marks' && (
         <Sheet title="划线" sub={`${p.hls.length} 条`} onClose={() => p.setPanel(null)}>
-          {!p.user && <div className="empty"><p>登录后才能划线。</p><button className="btn primary" onClick={p.onAccount}>登录 / 注册</button></div>}
+          {!p.user && <div className="empty"><p>登录后才能划线。</p><ShimmerButton onClick={p.onAccount}>登录 / 注册</ShimmerButton></div>}
           {p.user && !p.hls.length && (
             <div className="empty">
               <span className="empty-mark"><span className="hl" style={{ ['--c' as string]: '#F5D77A' }}>选中一段文字</span></span>
               <p>英文、中文都能划。句子换成另一种语言时，划线会收成一个小点。</p>
             </div>
           )}
-          <ul className="marks">
-            {[...p.hls].sort((a, b) => a.ch - b.ch || a.created - b.created).map((h, i) => (
-              <li key={h.id} style={{ ['--c' as string]: h.color, ['--i' as string]: i }}>
-                <button className="mk-go" onClick={() => p.goHl(h)}>
-                  <span className="mk-meta"><i />CH {String(h.ch).padStart(2, '0')} · {h.lang === 'en' ? 'EN' : '中'}</span>
-                  <span className={'mk-text ' + h.lang}>{h.text}</span>
-                </button>
-                <textarea placeholder="写点想法…" defaultValue={h.note} onBlur={e => p.noteHl(h.id, e.target.value)} rows={1} />
-                <button className="mk-del" onClick={() => p.delHl(h.id)} aria-label="删除"><X weight="bold" /></button>
-              </li>
-            ))}
-          </ul>
+          <div className="marks">
+            <AnimatePresence initial={false}>
+              {[...p.hls].sort((a, b) => a.ch - b.ch || a.created - b.created).map(h => (
+                <FolderCard key={h.id} className="mk" tab={<><i style={{ background: h.color }} />CH {String(h.ch).padStart(2, '0')} · {h.lang === 'en' ? 'EN' : '中'}</>}
+                  tabAside={<button className="mk-del" onClick={() => p.delHl(h.id)} aria-label="删除"><X weight="bold" /></button>}>
+                  <button className="mk-go" onClick={() => p.goHl(h)} style={{ ['--c' as string]: h.color }}>
+                    <span className={'mk-text ' + h.lang}>{h.text}</span>
+                  </button>
+                  <textarea placeholder="写点想法…" defaultValue={h.note} onBlur={e => p.noteHl(h.id, e.target.value)} rows={1} />
+                </FolderCard>
+              ))}
+            </AnimatePresence>
+          </div>
         </Sheet>
       )}
 
@@ -99,16 +98,13 @@ export function Sidebar(p: Props) {
             <input type="range" min={15} max={26} value={p.prefs.fontSize} onChange={e => p.setPrefs({ ...p.prefs, fontSize: +e.target.value })} />
           </div>
           <div className="field">
-            <label>外观</label>
-            <div className="seg">
-              <button className={p.prefs.theme === 'paper' ? 'on' : ''} onClick={() => p.setPrefs({ ...p.prefs, theme: 'paper' })}><Sun weight="bold" />浅色</button>
-              <button className={p.prefs.theme === 'night' ? 'on' : ''} onClick={() => p.setPrefs({ ...p.prefs, theme: 'night' })}><Moon weight="bold" />深色</button>
-            </div>
+            <label>外观 <span className="mono">{p.prefs.theme === 'night' ? '深色' : '浅色'}</span></label>
+            <ThemeToggle dark={p.prefs.theme === 'night'} onChange={d => p.setPrefs({ ...p.prefs, theme: d ? 'night' : 'paper' })} />
           </div>
           <div className="field">
             <label>版面</label>
             <div className="seg">
-              {(['auto', 'single'] as const).map(t => <button key={t} className={p.prefs.spread === t ? 'on' : ''} onClick={() => p.setPrefs({ ...p.prefs, spread: t })}>{t === 'auto' ? '自动双栏' : '单栏'}</button>)}
+              {(['auto', 'single'] as const).map(t => <button key={t} className={p.prefs.spread === t ? 'on' : ''} onClick={() => p.setPrefs({ ...p.prefs, spread: t })}>{p.prefs.spread === t && <PillIndicator id="spread-pill" className="seg-ind" />}<span>{t === 'auto' ? '自动双栏' : '单栏'}</span></button>)}
             </div>
           </div>
           <div className="field">
@@ -124,7 +120,7 @@ export function Sidebar(p: Props) {
             ) : (
               <>
                 <p className="note">登录后可以划线、写笔记、和 AI 讨论，数据自动同步，只有你自己看得到。</p>
-                <div className="btn-row"><button className="btn primary" onClick={p.onAccount}><UserCircle weight="bold" />登录 / 注册</button></div>
+                <div className="btn-row"><ShimmerButton onClick={p.onAccount}><UserCircle weight="bold" />登录 / 注册</ShimmerButton></div>
               </>
             )}
           </div>
@@ -147,12 +143,10 @@ export function Sidebar(p: Props) {
 
 function Tool({ on, label, onClick, children, count, dot }: { on: boolean; label: string; onClick(): void; children: React.ReactNode; count?: number; dot?: boolean }) {
   return (
-    <button className={'tool' + (on ? ' on' : '')} onClick={onClick} aria-label={label} aria-pressed={on}>
+    <DockItem on={on} label={label} onClick={onClick}
+      badge={<>{!!count && <span className="count">{count}</span>}{dot && !on && <span className="live" />}</>}>
       {children}
-      {!!count && <span className="count">{count}</span>}
-      {dot && !on && <span className="live" />}
-      <span className="tip side">{label}</span>
-    </button>
+    </DockItem>
   )
 }
 

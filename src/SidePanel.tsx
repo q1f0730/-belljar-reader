@@ -2,6 +2,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { X, ArrowUp, Stop, Trash, Sparkle, Quotes, ArrowSquareOut, PlusCircle, ClockCounterClockwise } from '@phosphor-icons/react'
 import type { ChatMsg, Note, User } from './account'
+import { AnimatePresence } from 'framer-motion'
+import { BlurIn, FolderCard, MorphCapsule, ShimmerButton, WordReveal } from './rw'
 
 export type Side = 'notes' | 'ai' | null
 
@@ -26,7 +28,7 @@ export function SidePanel(p: Props) {
       {!p.user ? (
         <div className="side-gate">
           <p>{p.side === 'ai' ? '登录后可以和 AI 讨论这本书。' : '登录后可以写笔记。'}划线、笔记和对话会自动同步到你的账号，只有你自己看得到。</p>
-          <button className="btn primary" onClick={p.onLogin}>登录 / 注册</button>
+          <ShimmerButton onClick={p.onLogin}>登录 / 注册</ShimmerButton>
         </div>
       ) : p.side === 'notes' ? <Notes {...p} /> : <Chat {...p} />}
     </aside>
@@ -53,9 +55,11 @@ function Notes(p: Props) {
         <div className="composer-row"><small>{text.length ? `${text.length} 字 · Ctrl+Enter 保存` : '会记下当前位置'}</small><button className="btn primary sm" disabled={!text.trim() && !quote} onClick={save}>保存</button></div>
       </div>
       {!list.length && <div className="empty"><p>还没有笔记。选中一段文字，点「记笔记」，也能把它引用进来。</p></div>}
-      <ul className="note-list">
-        {list.map(n => <NoteItem key={n.id} n={n} {...p} />)}
-      </ul>
+      <div className="note-list">
+        <AnimatePresence initial={false}>
+          {list.map(n => <NoteItem key={n.id} n={n} {...p} />)}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
@@ -65,15 +69,13 @@ function NoteItem({ n, editNote, delNote, goNote }: { n: Note } & Props) {
   useEffect(() => setT(n.text), [n.text])
   const d = new Date(n.created)
   return (
-    <li>
-      <div className="mk-meta">
-        {n.ch ? <button className="note-go" onClick={() => goNote(n)} title="跳到这里">CH {String(n.ch).padStart(2, '0')}<ArrowSquareOut weight="bold" /></button> : null}
-        <span>{d.getMonth() + 1}/{d.getDate()} {String(d.getHours()).padStart(2, '0')}:{String(d.getMinutes()).padStart(2, '0')}</span>
-        <button className="mk-del" onClick={() => { if (confirm('删除这条笔记？')) delNote(n.id) }} aria-label="删除笔记"><Trash weight="bold" /></button>
-      </div>
+    <FolderCard className="note"
+      tab={n.ch ? <button className="note-go" onClick={() => goNote(n)} title="跳到这里">CH {String(n.ch).padStart(2, '0')}<ArrowSquareOut weight="bold" /></button> : <span>笔记</span>}
+      tabAside={<><span className="folder-when">{d.getMonth() + 1}/{d.getDate()} {String(d.getHours()).padStart(2, '0')}:{String(d.getMinutes()).padStart(2, '0')}</span>
+        <button className="mk-del" onClick={() => { if (confirm('删除这条笔记？')) delNote(n.id) }} aria-label="删除笔记"><Trash weight="bold" /></button></>}>
       {n.quote && <blockquote>{n.quote}</blockquote>}
       <AutoText value={t} onChange={setT} onBlur={() => { if (t !== n.text) editNote(n.id, t) }} />
-    </li>
+    </FolderCard>
   )
 }
 
@@ -138,6 +140,7 @@ const SUGGEST = ['这一页在讲什么？', '这一页有哪些难懂的句子�
 
 function Chat(p: Props) {
   const [text, setText] = useState('')
+  const [focus, setFocus] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const ta = useRef<HTMLTextAreaElement>(null)
   const quote = p.draftQuote?.for === 'ai' ? p.draftQuote.text : undefined
@@ -154,26 +157,26 @@ function Chat(p: Props) {
         {!msgs.length && (
           <div className="chat-empty">
             <Sparkle weight="duotone" />
-            <p>问我这本书的任何问题：句子看不懂、人物在想什么、背景典故……我会结合你正在读的这一页来回答。</p>
+            <WordReveal text="问我这本书的任何问题：句子看不懂、人物在想什么、背景典故……我会结合你正在读的这一页来回答。" step={0.018} />
             <div className="chips">{SUGGEST.map(s => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
           </div>
         )}
         {msgs.map(m => (
-          <div key={m.id} className={'msg ' + m.role}>
+          <BlurIn key={m.id} className={'msg ' + m.role}>
             {m.quote && <blockquote>{m.quote}</blockquote>}
-            {m.role === 'assistant' ? <Md text={m.content || (p.busy ? '…' : '')} /> : <p>{m.content}</p>}
-          </div>
+            {m.role === 'assistant' ? (m.content ? <Md text={m.content} /> : p.busy ? <span className="typing" aria-label="正在思考"><i /><i /><i /></span> : null) : <p>{m.content}</p>}
+          </BlurIn>
         ))}
       </div>
       <div className="composer">
         {quote && <Quote text={quote} onClear={p.clearQuote} />}
-        <div className="pill">
-          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} rows={1} maxLength={2000} placeholder="问点什么…"
+        <MorphCapsule focused={focus || !!text}>
+          <textarea ref={ta} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} value={text} onChange={e => setText(e.target.value)} rows={1} maxLength={2000} placeholder="问点什么…"
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} />
           {p.busy
             ? <button className="send stop" onClick={p.stopChat} aria-label="停止" title="停止"><Stop weight="fill" /></button>
             : <button className="send" disabled={!text.trim()} onClick={() => send()} aria-label="发送" title="发送（Enter）"><ArrowUp weight="bold" /></button>}
-        </div>
+        </MorphCapsule>
       </div>
     </div>
   )
