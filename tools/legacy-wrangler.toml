@@ -24,3 +24,4 @@ database_id = "47f7ca7b-4078-4f17-a7b2-0b10f2f6a601"
 [vars]
 QWEN_BASE = "https://maas.qianwenaiapi.com/compatible-mode/v1"
 QWEN_MODEL = "qwen3.8-max-0902"
+

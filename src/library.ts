@@ -10,6 +10,8 @@ export interface Book {
   addedAt: string
   color: string
   cover: { src: string; alt: string }
+  dataBase?: string
+  draft?: boolean
 }
 
 export const BOOKS: Book[] = [

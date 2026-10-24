@@ -1,49 +1,46 @@
-# 阅间 · 网页书库
+# 阅间 · 双语网页书库
 
-把英文小说做成可以阅读、翻译和记笔记的网页书。by Q1f730
+在 ChatGPT Sites 中阅读、翻译、记笔记，并用 Mercury-3 自动把上传的书整理成网页书。
 
-公开站点：[阅间书库](https://yuejian-library-q1f.stillriver129.chatgpt.site/)。使用 ChatGPT Sites 托管。
+公开站点：https://yuejian-library-q1f.stillriver129.chatgpt.site/
 
-## 功能
+## 上书 Agent
 
-- 书库首页、书名和作者搜索、阅读状态筛选、最近阅读排序。
-- 电脑双页、手机单页阅读；支持键盘翻页和手机左右滑动。
-- 逐词和逐句翻译、中英全文切换、原书译注。
-- 每本书独立保存进度、划线和笔记，使用当前浏览器的 IndexedDB。
-- 按书导入、导出备份；拒绝将其他书的备份导入当前书。
-- 无需登录。AI 陪读尚未接入，界面会明确显示。
-- 每本书根据书名、实际内容与核心意象，用 AI 单独生成古典油画封面。
+点击「添加书籍」，使用书库主人的 ChatGPT 账号登录。上传 EPUB 或 UTF-8 TXT，可同时上传中文译本与英文原著。双版本先用代码按段落、句长对齐现有文字，再由 AI 检查疑似错配；单版本生成另一种语言。Agent 识别正文目录、分批整理、保存进度，完成后生成仅主人可见的草稿。预览后点击「加入公开书库」才会向所有访客开放。
 
-## 视觉设计
+- EPUB：每个文件最多 20 MB；TXT：最多 5 MB。每个版本正文最多 200 万字符。
+- 目前支持可提取文字的 EPUB / TXT，不支持 DRM、扫描图片或 PDF。
+- 请保持任务页面打开。关闭页面会暂停后续批次，回来点击继续；已完成批次不重复调用模型。
+- 原著和已有译文保留原样。代码保证每个源句按顺序恰好使用一次，AI 只能返回需要复核的单元编号。模型标出问题、内容受限或检查结果无效时，保留代码对齐结果并标记对应章节供复核。
+- 单版本的另一种语言标记为 AI 翻译；模型限制内容时暂停，不生成替代文字。自动对齐仍应通过草稿预览抽查。
+- 新书先使用代码生成的书名封面。已有《钟形罩》油画封面保持原样。
+- 上传内容、任务进度、网页书数据保存在 Sites 的私有文件存储与数据库中，书籍正文不推送 GitHub。
 
-沿用《钟形罩》阅读器的白灰点阵、白色浮层、黑色胶囊按钮与少量珊瑚红。油画用于书籍封面。
+## 原有阅读功能
 
-封面制作规则见 `design/LIBRARY.md`；《钟形罩》的完整生图提示词与内容依据见 `design/covers/belljar.md`。
+白灰点阵、白色浮层、黑色胶囊按钮与少量珊瑚红。支持书库搜索和筛选、电脑双页/手机单页、翻页、单词注释、逐句中英切换、全文翻译、划线和笔记。阅读记录按书隔离保存在当前浏览器，可导入与导出备份。AI 陪读聊天尚未开启；上书 Agent 是独立功能。
 
-## 书籍数据
+## 模型与权限
 
-延续本仓库的原有规则：**原著与译文不提交到 GitHub**。本次同步包含源码、界面和封面，站点所用的 20 章中英对照数据继续保留在现有 Sites 项目中。阅读进度与笔记也不提交到仓库。
+服务端固定使用 `https://api.inceptionlabs.ai/v1/chat/completions` 和 `mercury-3`，不接受访客提供的上游地址。使用 ChatGPT Sites 的密钥设置配置：
 
-本地运行阅读器时，请自行准备书籍数据，放在 `public/books/<book-id>/toc.json` 和 `ch01.json` 等文件中。此目录已被 `.gitignore` 排除。
+- `INCEPTION_API_KEY`：模型密钥，标记为 secret。
+- `LIBRARY_ADMIN_EMAIL`：书库主人的 ChatGPT 登录邮箱，标记为 secret。
 
-`tools/` 保留原有 EPUB 处理工具，需要自行提供书籍。词典数据来自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT）。
+不要在前端、仓库、hosting manifest 或日志中写入密钥。公开访客可以阅读；只有管理员可上传、调用模型、预览草稿和发布。写操作校验同源、身份与任务状态。每批有持久锁和结果缓存，避免重复执行。
 
-## 继续添加书籍
+## 本地开发与验证
 
-1. 分配稳定的编号，例如 `new-book`，并将章节 JSON 放在 `public/books/new-book/`。
-2. 阅读书籍内容，结合书名、人物、核心意象和情绪，用内置生图工具制作独立的古典油画封面。画作不含文字，优化后放在 `public/covers/`。
-3. 在 `design/covers/` 记录完整提示词与内容依据。
-4. 在 `src/library.ts` 的 `BOOKS` 中添加标题、作者、章数、`cover.src`、`cover.alt` 等元数据。
-5. 构建并更新现有 ChatGPT Sites 项目，不需要重新创建站点。
+`npm ci` 安装依赖；`npm run dev` 启动原生 Sites 开发环境；`npm run build` 执行类型检查和正式构建。
 
-## 本地开发与检查
+`npm run db:generate` 生成数据库迁移。迁移由 Sites 在正式部署时应用。
 
-- `npm ci`：安装依赖。
-- `npm run dev`：启动开发。
-- `npm run build`：类型检查并构建到 `dist/`。
-- `node scripts/verify-book-storage.mjs`：验证书籍数据隔离与备份。
-- `node scripts/verify-books.mjs`：准备本地书籍 JSON 后，验证章节与词典数据。
+`npm run test:agent` 验证 EPUB 解析、原文覆盖、无效对齐拒绝、权限、同源校验、重复上传、失败续跑、草稿隔离、发布与导出。此测试使用自写样例和模拟模型响应，不消耗 API 额度。真实 EPUB 测试结果另行记录。
 
-## 部署
+原有存储检查：`node scripts/verify-book-storage.mjs`。静态书籍检查：准备数据后运行 `node scripts/verify-books.mjs`。
 
-当前站点使用 ChatGPT Sites；`.openai/hosting.json` 保留现有项目身份与静态部署目录。已有的 `worker/`、`wrangler.toml` 和 `tools/deploy.sh` 是历史部署文件，当前站点不使用它们。
+## 数据与部署
+
+保留 `.openai/hosting.json` 中的现有 Sites 项目身份，以及 `DB` / `BUCKET` 逻辑绑定。使用 Sites 的源码同步、构建、保存与发布流程。`worker/legacy.ts`、`tools/legacy-wrangler.toml` 与 `tools/deploy.sh` 仅为历史部署文件，当前部署不调用它们。
+
+已有《钟形罩》的静态 JSON 由既有 Sites 项目保留。GitHub 不包含小说原著与译文。词典数据来自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT）。

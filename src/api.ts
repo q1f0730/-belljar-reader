@@ -3,13 +3,13 @@ import type { Book } from './library'
 export class RegionError extends Error {}
 async function j<T>(url: string): Promise<T> {
   const r = await fetch(url)
-  if (r.status === 451) throw new RegionError((await r.json()).message)
+  if (r.status === 451) throw new RegionError(((await r.json()) as {message:string}).message)
   if (!r.ok) throw new Error(`加载失败 ${r.status}`)
   return r.json()
 }
 export function createBookApi(book: Book) {
   const cache = new Map<number, Promise<Chapter>>()
-  const base = `/books/${encodeURIComponent(book.id)}`
+  const base = book.dataBase || `/books/${encodeURIComponent(book.id)}`
   return {
     loadToc: () => j<Toc>(`${base}/toc.json`),
     loadChapter(n: number) {

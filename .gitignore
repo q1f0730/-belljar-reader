@@ -33,5 +33,11 @@ outputs/
 *.tsbuildinfo
 
 
-# 原著和译文仅用于本地或 Sites 部署，不推送 GitHub
+.vinext/
+.next/
+.env*
+!.env.example
+work/
+
+# 原著与译文不推送 GitHub
 /public/books/

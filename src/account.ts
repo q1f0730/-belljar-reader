@@ -8,7 +8,7 @@ export interface Doc<T> { items: T[]; del: Record<string, number> }
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { credentials: 'same-origin', ...init, headers: { 'content-type': 'application/json', ...(init?.headers || {}) } })
-  const data = await r.json().catch(() => ({}))
+  const data = await r.json().catch(() => ({})) as {message?:string;error?:string}
   if (!r.ok) throw Object.assign(new Error(data.message || data.error || `出错了（${r.status}）`), { status: r.status, data })
   return data as T
 }
@@ -101,7 +101,7 @@ export class Syncer<T extends { id: string }> {
 // AI 对话：流式读取
 export async function ask(messages: { role: string; content: string }[], context: { chapter?: number; page?: string; quote?: string }, onText: (t: string) => void, signal?: AbortSignal) {
   const r = await fetch('/api/ai', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages, context }), signal })
-  if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})); throw new Error(d.error || `AI 出错了（${r.status}）`) }
+  if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})) as {message?:string;error?:string}; throw new Error(d.error || `AI 出错了（${r.status}）`) }
   const rd = r.body.getReader(); const dec = new TextDecoder(); let buf = ''
   for (;;) {
     const { done, value } = await rd.read(); if (done) break
@@ -113,3 +113,4 @@ export async function ask(messages: { role: string; content: string }[], context
     }
   }
 }
+
