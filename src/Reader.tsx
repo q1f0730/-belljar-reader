@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import type { Chapter, Highlight, Lang, Mode } from './types'
 import { UnitView } from './Unit'
 
-export interface ReaderHandle { next(): void; prev(): void; goUnit(u: string): void }
+export interface ReaderHandle { next(): void; prev(): void; goUnit(u: string): void; visibleUnits(): string[] }
 interface Props {
   chapter: Chapter; langOf: (u: string) => Lang; base: Lang; mode: Mode | 'none'
   glosses: Map<string, string>; active: string | null; hls: Highlight[]
@@ -88,7 +88,12 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
   useImperativeHandle(ref, () => ({
     next, prev,
     goUnit(u) { const t = pageOf(u); if (t !== null) setPage(t) },
-  }), [next, prev, pageOf])
+    visibleUnits() {
+      if (!flow.current) return []
+      const left = flow.current.getBoundingClientRect().left + page * step
+      return [...flow.current.querySelectorAll<HTMLElement>('.unit')].filter(unit => [...unit.getClientRects()].some(r => r.width > 0 && r.right > left + 2 && r.left < left + dim.w - 2)).map(unit => unit.dataset.u!)
+    },
+  }), [next, prev, pageOf, page, step, dim.w])
 
   const touch = useRef<{ x: number; y: number } | null>(null)
   return (
@@ -127,3 +132,4 @@ export const Reader = forwardRef<ReaderHandle, Props>(function Reader(p, ref) {
     </div>
   )
 })
+

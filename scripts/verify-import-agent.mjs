@@ -41,13 +41,18 @@ class Statement{
 }
 const objects=new Map()
 const bucket={async put(k,v){objects.set(k,v)},async get(k){if(!objects.has(k))return null;return{json:async()=>JSON.parse(objects.get(k)),body:objects.get(k)}}}
-const env={DB:{prepare:s=>new Statement(s),batch:async statements=>{sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r}catch(e){sqlite.exec('ROLLBACK');throw e}}},BUCKET:bucket,INCEPTION_API_KEY:'fixture-not-a-secret',LIBRARY_ADMIN_EMAIL:'owner@example.test'}
-const headers={'content-type':'application/json',origin:'https://library.example.test','oai-authenticated-user-id':'owner-123','oai-authenticated-user-email':'owner@example.test'}
+const env={DB:{prepare:s=>new Statement(s),batch:async statements=>{sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r}catch(e){sqlite.exec('ROLLBACK');throw e}}},BUCKET:bucket,INCEPTION_API_KEY:'fixture-not-a-secret'}
+const headers={'content-type':'application/json',origin:'https://library.example.test',cookie:'__Host-yuejian-upload='+'a'.repeat(64)}
 const request=(path,post,authorized=true)=>libraryRequest(new Request('https://library.example.test'+path,{method:post===undefined?'GET':'POST',headers:authorized?headers:{origin:headers.origin,'content-type':'application/json'},...(post!==undefined?{body:JSON.stringify(post)}:{})}),env)
 assert.equal((await request('/api/agent/jobs',input,false)).status,401)
 const wrongOrigin=await libraryRequest(new Request('https://library.example.test/api/agent/jobs',{method:'POST',headers:{...headers,origin:'https://other.test'},body:'{}'}),env)
 assert.equal(wrongOrigin.status,403)
-assert.equal((await request('/api/agent/jobs',input)).status,201)
+const status=await request('/api/agent/status',undefined,false)
+assert.match(status.headers.get('set-cookie'),/HttpOnly; Secure; SameSite=Lax/)
+assert.equal((await status.json()).signIn,undefined)
+const created=await request('/api/agent/jobs',input);assert.equal(created.status,201)
+const jobId=(await created.json()).job.id
+assert.notEqual(jobId,input.requestId)
 assert.equal((await request('/api/agent/jobs',{...input,requestId:'duplicate-test-id'})).status,200)
 assert.equal((await request('/api/agent/jobs')).status,200)
 const originalFetch=globalThis.fetch
@@ -60,19 +65,29 @@ globalThis.fetch=async(_url,init)=>{
   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(data)}}],usage:{prompt_tokens:10,completion_tokens:5}})
 }
 try{
-  await request('/api/agent/jobs/'+input.requestId+'/step',{})
-  fail=true;assert.equal((await request('/api/agent/jobs/'+input.requestId+'/step',{})).status,429)
-  let state=await (await request('/api/agent/jobs/'+input.requestId)).json();assert.equal(state.job.cursor,0);assert.equal(state.job.status,'paused')
-  fail=false;await request('/api/agent/jobs/'+input.requestId+'/step',{})
-  await request('/api/agent/jobs/'+input.requestId+'/step',{})
-  state=await (await request('/api/agent/jobs/'+input.requestId)).json();assert.equal(state.job.status,'draft')
+  await request('/api/agent/jobs/'+jobId+'/step',{})
+  fail=true;assert.equal((await request('/api/agent/jobs/'+jobId+'/step',{})).status,429)
+  let state=await (await request('/api/agent/jobs/'+jobId)).json();assert.equal(state.job.cursor,0);assert.equal(state.job.status,'paused')
+  fail=false;await request('/api/agent/jobs/'+jobId+'/step',{})
+  await request('/api/agent/jobs/'+jobId+'/step',{})
+  state=await (await request('/api/agent/jobs/'+jobId)).json();assert.equal(state.job.status,'draft')
+  const otherHeaders={...headers,cookie:'__Host-yuejian-upload='+'b'.repeat(64)}
+  const other=(path,post)=>libraryRequest(new Request('https://library.example.test'+path,{headers:otherHeaders,method:post===undefined?'GET':'POST',...(post===undefined?{}:{body:JSON.stringify(post)})}),env)
+  for(const action of ['', '/export', '/step', '/publish'])assert.equal((await other('/api/agent/jobs/'+jobId+action,['/step','/publish'].includes(action)?{}:undefined)).status,404)
+  assert.equal((await (await other('/api/agent/jobs')).json()).jobs.length,0)
+  assert.equal((await (await other('/api/library/books?drafts=1')).json()).books.length,0)
   const publicBooks=await (await request('/api/library/books',undefined,false)).json();assert.equal(publicBooks.books.length,0)
   const bookId=state.job.bookId
   assert.equal((await request(`/api/library/books/${bookId}/toc.json`,undefined,false)).status,404)
-  const exported=await (await request('/api/agent/jobs/'+input.requestId+'/export')).json();assert.equal(exported.chapters[0].paras.flatMap(p=>p.u).length,3)
+  assert.equal((await other(`/api/library/books/${bookId}/cover.svg`)).status,404)
+  assert.equal((await request(`/api/library/books/${bookId}/toc.json`)).status,200)
+  assert.equal((await (await request('/api/library/books?drafts=1')).json()).books.length,1)
+  const second=await (await other('/api/agent/jobs',input)).json();assert.notEqual(second.job.id,jobId)
+  assert.equal((await request('/api/agent/jobs/'+jobId)).status,200)
+  const exported=await (await request('/api/agent/jobs/'+jobId+'/export')).json();assert.equal(exported.chapters[0].paras.flatMap(p=>p.u).length,3)
   assert.equal(exported.chapters[0].paras.flatMap(p=>p.u).map(u=>u.en.join(' ')).join(' '),'A door opened. She smiled. He left.')
-  const callsBefore=calls;await request('/api/agent/jobs/'+input.requestId+'/step',{});assert.equal(calls,callsBefore)
-  await request('/api/agent/jobs/'+input.requestId+'/publish',{})
+  const callsBefore=calls;await request('/api/agent/jobs/'+jobId+'/step',{});assert.equal(calls,callsBefore)
+  await request('/api/agent/jobs/'+jobId+'/publish',{})
   assert.equal((await (await request('/api/library/books',undefined,false)).json()).books.length,1)
   assert.equal((await request(`/api/library/books/${bookId}/toc.json`,undefined,false)).status,200)
   assert(!coverSvg({title:'<script>alert(1)</script>',englishTitle:'x',originalAuthor:'x'}).includes('<script>'))
@@ -89,4 +104,4 @@ try{
   assert.equal(codeAligned.units.map(u=>u.zh).join(''),tasks[0].zh.map(s=>s.text).join(''))
   await assert.rejects(()=>processTask(env.INCEPTION_API_KEY,{...tasks[0],zh:[],paired:false}),ContentFiltered)
 }finally{globalThis.fetch=originalFetch;sqlite.close()}
-console.log('Verified EPUB extraction, exact source coverage, alignment rejection, authentication, origin checks, duplicate uploads, resumable errors, private drafts, publication, export, and safe SVG covers.')
+console.log('Verified EPUB extraction, exact source coverage, alignment rejection, anonymous upload isolation, origin checks, duplicate uploads, resumable errors, private drafts, publication, export, and safe SVG covers.')

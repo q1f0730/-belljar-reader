@@ -456,6 +456,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .msg.user { padding: 7px 13px; border-radius: 14px 14px 4px 14px; max-width: 85%; }
 .chat-empty { padding: 0 18px; font-size: 13px; }
 .chat-empty > svg { font-size: 26px; margin-bottom: 4px; }
+.chat-empty h4 { margin: 10px 0; color: var(--ink); font-weight: 500; font-size: 17px; }
+.chat-context { margin: 0 4px 10px; color: var(--ink-3); font-size: 11px; letter-spacing: .01em; }
+.chat-error { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; line-height: 1.6; }
+.chat-error span { flex: 1; }
+.chat-error button { flex: none; background: none; border: 0; color: var(--accent); padding: 4px; }
 .chips { gap: 8px; margin-top: 16px; }
 .chips button { font-size: 12px; padding: 6px 12px; color: var(--ink-2); }
 .chat .composer { border-top: 0; padding: 8px 16px 16px; }
@@ -475,3 +480,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .app.with-side .sheet-page { right: 10px; }
   .history { width: min(280px, calc(100vw - 40px)); }
 }
+

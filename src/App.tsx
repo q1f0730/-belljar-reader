@@ -11,6 +11,8 @@ import { cmpUnit, tokens } from './text'
 import { addMerged, erase, overlaps, textOf } from './hl'
 import { ArrowLeft, Eraser, NotePencil, Sparkle } from '@phosphor-icons/react'
 import type { ChatMsg, Note, User } from './account'
+import { ask } from './account'
+import { readingContext } from './reading-context'
 import { SidePanel, type Side } from './SidePanel'
 
 const COLORS = ['#F5D77A', '#F4A3A3', '#9CC8F0', '#A8D5AE']
@@ -50,7 +52,9 @@ export default function App({ book, onBack }: { book: Book; onBack(): void }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [chats, setChats] = useState<ChatMsg[]>([])
   const [conv, setConv] = useState<string>(() => crypto.randomUUID()) // 当前对话；新对话 = 新 id，还没有消息
-  const busy = false
+  const [busy, setBusy] = useState(false)
+  const [chatError, setChatError] = useState('')
+  const chatRequest = useRef<AbortController | null>(null)
   const [draftQuote, setDraftQuote] = useState<{ text: string; for: 'notes' | 'ai' } | null>(null)
   const dict = useRef<Record<string, DictEntry> | null>(null)
 
@@ -66,7 +70,34 @@ export default function App({ book, onBack }: { book: Book; onBack(): void }) {
   const editNote = (id: string, text: string) => setNotes(ns => ns.map(n => (n.id === id ? { ...n, text, upd: Date.now() } : n)))
   const delNote = (id: string) => setNotes(ns => ns.filter(n => n.id !== id))
 
-  const sendChat = () => say('AI 陪读尚未开启。')
+  useEffect(() => () => { chatRequest.current?.abort() }, [])
+  const sendChat = async (text: string, quote?: string, retry = false) => {
+    if (chatRequest.current || !chap || !text.trim()) return
+    const controller = new AbortController(); chatRequest.current = controller
+    setBusy(true); setChatError('')
+    const conversation = chats.filter(m => (m.conv || 'legacy') === conv)
+    const lastUser = conversation.findLastIndex(m => m.role === 'user')
+    const userMessage: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: text.trim().slice(0, 2000), at: Date.now(), quote, conv }
+    const history = retry && lastUser >= 0 ? conversation.slice(0, lastUser + 1) : [...conversation, userMessage]
+    const assistant: ChatMsg = { id: crypto.randomUUID(), role: 'assistant', content: '', at: Date.now(), conv }
+    setChats(current => [...current.filter(m => (m.conv || 'legacy') !== conv), ...history, assistant])
+    const messages = history.slice(-23).map(m => ({ role: m.role, content: (m.quote ? `引用：${m.quote}\n\n` : '') + m.content })).map(m => ({ ...m, content: m.content.slice(0, 6000) }))
+    while (messages.length > 1 && messages.reduce((n, m) => n + m.content.length, 0) > 34000) messages.shift()
+    try {
+      await ask(messages, readingContext(book, chap, reader.current?.visibleUnits() || [], info.page + 1, quote), delta => {
+        setChats(current => current.map(m => m.id === assistant.id ? { ...m, content: m.content + delta } : m))
+      }, controller.signal)
+    } catch (error) {
+      setChatError(controller.signal.aborted ? '回复已停止。' : error instanceof Error ? error.message : 'AI 暂时无法回复，请稍后重试。')
+    } finally {
+      setChats(current => current.filter(m => m.id !== assistant.id || m.content.trim()))
+      chatRequest.current = null; setBusy(false)
+    }
+  }
+  const retryChat = () => {
+    const last = chats.findLast(m => (m.conv || 'legacy') === conv && m.role === 'user')
+    if (last) void sendChat(last.content, last.quote, true)
+  }
 
   // 启动：恢复本机数据
   useEffect(() => {
@@ -382,13 +413,13 @@ export default function App({ book, onBack }: { book: Book; onBack(): void }) {
           {sel.over && <><i className="sp-sep" /><button className="sp-erase" onClick={eraseHl} aria-label="取消划线"><Eraser weight="bold" /><span>取消</span></button></>}
           <i className="sp-sep" />
           <button className="sp-act" onClick={() => quoteTo('notes')} aria-label="记笔记"><NotePencil weight="bold" /><span>记笔记</span></button>
-          <button className="sp-act" disabled title="AI 陪读尚未开启" aria-label="问 AI"><Sparkle weight="bold" /><span>问 AI</span></button>
+          <button className="sp-act" onClick={() => quoteTo('ai')} aria-label="问 AI"><Sparkle weight="bold" /><span>问 AI</span></button>
         </div>, document.body)}
 
       <SidePanel side={side} setSide={setSide} user={user} onLogin={() => {}}
         notes={notes} addNote={addNote} editNote={editNote} delNote={delNote} goNote={n => n.ch && goCh(n.ch, { unit: n.unit })}
         draftQuote={draftQuote} clearQuote={() => setDraftQuote(null)}
-        chats={chats} sendChat={sendChat} stopChat={() => {}} conv={conv} setConv={c => { if (!busy) setConv(c) }} newConv={() => { if (!busy) setConv(crypto.randomUUID()) }} delConv={id => { setChats(cs => cs.filter(m => (m.conv || 'legacy') !== id)); if (id === conv) setConv(crypto.randomUUID()) }} busy={busy} ch={chap?.n || ch} />
+        chats={chats} sendChat={sendChat} stopChat={() => chatRequest.current?.abort()} chatError={chatError} retryChat={retryChat} conv={conv} setConv={c => { if (!busy) {setConv(c);setChatError('')} }} newConv={() => { if (!busy) {setConv(crypto.randomUUID());setChatError('')} }} delConv={id => { if(busy)return;setChats(cs => cs.filter(m => (m.conv || 'legacy') !== id)); if (id === conv) {setConv(crypto.randomUUID());setChatError('')} }} busy={busy} ch={chap?.n || ch} />
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

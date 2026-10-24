@@ -2,37 +2,28 @@ import { makeTasks, validateInput, type ImportInput, type ImportPlan, type Impor
 import type { Book } from '../src/library'
 import type { Chapter, Toc } from '../src/types'
 import { AgentError, mercury, planImport, processTask, type Usage } from './mercury.ts'
+import { readJson, sameOrigin } from './request.ts'
+import { newUploadCookie, requireUploadOwner, uploadOwner } from './upload-access.ts'
+import { readingAi } from './reading-ai.ts'
 
 type Job={id:string;fingerprint:string;owner:string;title:string;status:string;cursor:number;total:number;metadata:string|null;error:string|null;lease_until:number;input_tokens:number;output_tokens:number;created:number;updated:number}
 type StoredBook={id:string;job_id:string;metadata:string;status:string;created:number}
 type State={plan:ImportPlan;paired:boolean;language:'en'|'zh';reviewBatches?:number;reviewChapters?:number[]}
 const json=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'private, no-store'}})
-function admin(req:Request,env:Cloudflare.Env){
-  return !!req.headers.get('oai-authenticated-user-id')&&!!env.LIBRARY_ADMIN_EMAIL&&req.headers.get('oai-authenticated-user-email')?.toLowerCase()===env.LIBRARY_ADMIN_EMAIL.toLowerCase()
-}
 function storage(env:Cloudflare.Env){if(!env.DB||!env.BUCKET)throw new AgentError('书库服务正在准备，请稍后再试。',503);return{db:env.DB,bucket:env.BUCKET}}
-function requireAdmin(req:Request,env:Cloudflare.Env){if(!admin(req,env))throw new AgentError(req.headers.get('oai-authenticated-user-id')?'只有书库主人可以添加书籍。':'请先使用 ChatGPT 登录。',req.headers.get('oai-authenticated-user-id')?403:401)}
-async function body(req:Request){
-  if(!req.headers.get('content-type')?.startsWith('application/json'))throw new AgentError('请使用 JSON 上传。',415)
-  const reader=req.body?.getReader();if(!reader)throw new AgentError('没有收到书籍。')
-  const parts:Uint8Array[]=[];let bytes=0
-  while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>10*1024*1024){await reader.cancel();throw new AgentError('上传内容超过 10 MB。',413)}parts.push(value)}
-  const all=new Uint8Array(bytes);let offset=0;for(const part of parts){all.set(part,offset);offset+=part.length}
-  try{return JSON.parse(new TextDecoder().decode(all))}catch{throw new AgentError('上传数据格式无效。')}
-}
 async function fromBucket<T>(bucket:R2Bucket,key:string):Promise<T|null>{const v=await bucket.get(key);return v?await v.json<T>():null}
 const put=(bucket:R2Bucket,key:string,v:unknown)=>bucket.put(key,JSON.stringify(v),{httpMetadata:{contentType:'application/json'}})
 function view(job:Job){const state=job.metadata?JSON.parse(job.metadata) as State:null;return{id:job.id,title:job.title,status:job.status,cursor:job.cursor,total:job.total,percent:['draft','published'].includes(job.status)?100:job.total?Math.min(98,Math.round(job.cursor/job.total*98)):0,error:job.error,bookId:`import-${job.id}`,chapters:state?.plan.chapters.length||0,reviewBatches:state?.reviewBatches||0,reviewChapters:state?.reviewChapters||[],inputTokens:job.input_tokens,outputTokens:job.output_tokens,updated:job.updated}}
 async function jobById(db:D1Database,id:string){const job=await db.prepare('SELECT * FROM library_import_jobs WHERE id=?').bind(id).first<Job>();if(!job)throw new AgentError('没有找到这项任务。',404);return job}
-async function createJob(req:Request,env:Cloudflare.Env){
-  const input:unknown=await body(req);validateInput(input)
+async function createJob(req:Request,env:Cloudflare.Env,owner:string){
+  const input:unknown=await readJson(req);validateInput(input)
   const {db,bucket}=storage(env)
-  const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({primary:input.primary,companion:input.companion}))))).map(x=>x.toString(16).padStart(2,'0')).join('')
+  const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({owner,primary:input.primary,companion:input.companion}))))).map(x=>x.toString(16).padStart(2,'0')).join('')
   const existing=await db.prepare('SELECT * FROM library_import_jobs WHERE fingerprint=?').bind(fingerprint).first<Job>();if(existing)return json({job:view(existing)})
-  const id=input.requestId,now=Date.now()
+  const id=crypto.randomUUID(),now=Date.now()
   // Store content privately; metadata creation never publishes a new book.
   await put(bucket,`imports/${id}/input.json`,input)
-  try{await db.prepare('INSERT INTO library_import_jobs (id,fingerprint,owner,title,status,created,updated) VALUES (?,?,?,?,?,?,?)').bind(id,fingerprint,req.headers.get('oai-authenticated-user-id')||'qa-service',input.primary.title,'planning',now,now).run()}
+  try{await db.prepare('INSERT INTO library_import_jobs (id,fingerprint,owner,title,status,created,updated) VALUES (?,?,?,?,?,?,?)').bind(id,fingerprint,owner,input.primary.title,'planning',now,now).run()}
   catch{const found=await db.prepare('SELECT * FROM library_import_jobs WHERE fingerprint=?').bind(fingerprint).first<Job>();if(found)return json({job:view(found)});throw new AgentError('保存上传任务失败，请重试。',503)}
   return json({job:view(await jobById(db,id))},201)
 }
@@ -99,29 +90,40 @@ export function coverSvg(book:Book){const title=escapeXml(book.title.slice(0,30)
 export async function libraryRequest(req:Request,env:Cloudflare.Env):Promise<Response>{
   try{
     const url=new URL(req.url),path=url.pathname.replace(/\/$/,'')
-    if(req.method==='POST'&&req.headers.get('origin')!==url.origin)throw new AgentError('请从书库页面提交。',403)
-    if(path==='/api/agent/status'&&req.method==='GET')return json({configured:!!env.INCEPTION_API_KEY,model:'mercury-3',isAdmin:admin(req,env),signedIn:!!req.headers.get('oai-authenticated-user-id'),signIn:'/signin-with-chatgpt?return_to='+encodeURIComponent('/?manage=1')})
+    if(req.method==='POST')sameOrigin(req)
+    if(path==='/api/ai'&&req.method==='POST')return await readingAi(req,env)
+    if(path==='/api/agent/status'&&req.method==='GET'){
+      const response=json({configured:!!env.INCEPTION_API_KEY,model:'mercury-3'})
+      if(!await uploadOwner(req))response.headers.append('Set-Cookie',newUploadCookie())
+      return response
+    }
     if(path==='/api/library/books'&&req.method==='GET'){
       if(!env.DB)return json({books:[]})
-      const q=admin(req,env)&&url.searchParams.get('drafts')==='1'?'SELECT * FROM library_books ORDER BY created DESC':"SELECT * FROM library_books WHERE status='published' ORDER BY created DESC"
-      const rows=await env.DB.prepare(q).all<StoredBook>();return json({books:rows.results.map(r=>({...JSON.parse(r.metadata),draft:r.status==='draft'}))})
+      const owner=url.searchParams.get('drafts')==='1'?await uploadOwner(req):null
+      const query=owner?env.DB.prepare("SELECT * FROM library_books WHERE status='published' OR job_id IN (SELECT id FROM library_import_jobs WHERE owner=?) ORDER BY created DESC").bind(owner):env.DB.prepare("SELECT * FROM library_books WHERE status='published' ORDER BY created DESC")
+      const rows=await query.all<StoredBook>();return json({books:rows.results.map(r=>({...JSON.parse(r.metadata),draft:r.status==='draft'}))})
     }
     const asset=path.match(/^\/api\/library\/books\/([a-zA-Z0-9-]{8,100})\/(toc\.json|ch\d+\.json|cover\.svg)$/)
     if(asset&&req.method==='GET'){
       const {db,bucket}=storage(env);const book=await db.prepare('SELECT * FROM library_books WHERE id=?').bind(asset[1]).first<StoredBook>()
-      if(!book||(book.status!=='published'&&!admin(req,env)))throw new AgentError('没有找到这本书。',404)
+      if(!book)throw new AgentError('没有找到这本书。',404)
+      if(book.status!=='published'){
+        const owner=await uploadOwner(req),job=await jobById(db,book.job_id)
+        if(!owner||owner!==job.owner)throw new AgentError('没有找到这本书。',404)
+      }
       if(asset[2]==='cover.svg')return new Response(coverSvg(JSON.parse(book.metadata)),{headers:{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'private, no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; sandbox"}})
       const value=await bucket.get(`library/${book.id}/${asset[2]}`);if(!value)throw new AgentError('章节还没有准备好。',404)
       return new Response(value.body,{headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store'}})
     }
     if(!path.startsWith('/api/agent/'))throw new AgentError('没有这个页面。',404)
-    requireAdmin(req,env)
+    const owner=await requireUploadOwner(req)
     if(path==='/api/agent/check'&&req.method==='POST'){await mercury(env.INCEPTION_API_KEY||'','Return {"ok":true}.',{test:'connection'},{type:'object',properties:{ok:{type:'boolean'}},required:['ok'],additionalProperties:false});return json({ok:true,model:'mercury-3'})}
-    if(path==='/api/agent/jobs'&&req.method==='GET'){const {db}=storage(env);const rows=await db.prepare('SELECT * FROM library_import_jobs ORDER BY created DESC LIMIT 50').all<Job>();return json({jobs:rows.results.map(view)})}
-    if(path==='/api/agent/jobs'&&req.method==='POST')return await createJob(req,env)
+    if(path==='/api/agent/jobs'&&req.method==='GET'){const {db}=storage(env);const rows=await db.prepare('SELECT * FROM library_import_jobs WHERE owner=? ORDER BY created DESC LIMIT 50').bind(owner).all<Job>();return json({jobs:rows.results.map(view)})}
+    if(path==='/api/agent/jobs'&&req.method==='POST')return await createJob(req,env,owner)
     const route=path.match(/^\/api\/agent\/jobs\/([a-zA-Z0-9-]{8,80})(?:\/(step|publish|export))?$/)
     if(!route)throw new AgentError('没有这个操作。',404)
     const {db,bucket}=storage(env),id=route[1],action=route[2]
+    if((await jobById(db,id)).owner!==owner)throw new AgentError('没有找到这项任务。',404)
     if(!action&&req.method==='GET')return json({job:view(await jobById(db,id))})
     if(action==='step'&&req.method==='POST')return await step(env,id)
     if(action==='publish'&&req.method==='POST'){

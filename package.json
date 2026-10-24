@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "install:ci": "node scripts/install-ci.mjs",
     "db:generate": "drizzle-kit generate",
-    "test:agent": "node --experimental-strip-types scripts/verify-import-agent.mjs"
+    "test:agent": "node --experimental-strip-types scripts/verify-import-agent.mjs",
+    "test:reading": "node --experimental-strip-types scripts/verify-reading-ai.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

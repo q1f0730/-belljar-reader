@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, FileText, Pause, Play, Plus, Sparkle, UploadSimple } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Check, FileText, Pause, Play, Plus, UploadSimple } from '@phosphor-icons/react'
 import { strToU8, zipSync } from 'fflate'
 import type { ImportInput } from './import-format'
 import { parseUpload } from './parse-upload'
 import './import-agent.css'
 
 type Job={id:string;title:string;status:string;cursor:number;total:number;percent:number;error?:string;bookId:string;chapters:number;reviewBatches?:number;reviewChapters?:number[]}
-type Status={configured:boolean;model:string;isAdmin:boolean;signedIn:boolean;signIn:string}
+type Status={configured:boolean;model:string}
 export async function agentApi<T>(path:string,post?:unknown):Promise<T>{const response=await fetch(path,{...(post!==undefined?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(post)}:{}),cache:'no-store'});const data=await response.json() as T&{error?:string};if(!response.ok)throw new Error(data.error||'暂时无法连接书库。');return data}
 const id=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('')
 
@@ -16,7 +16,7 @@ export default function ImportAgent({onClose,onOpen}:{onClose():void;onOpen(id:s
   const [loading,setLoading]=useState(false),[active,setActive]=useState<string|null>(null),[message,setMessage]=useState(''),[error,setError]=useState('')
   const working=useRef(false)
   const refresh=async()=>{const r=await agentApi<{jobs:Job[]}>('/api/agent/jobs');setJobs(r.jobs)}
-  useEffect(()=>{let alive=true;agentApi<Status>('/api/agent/status').then(s=>{if(!alive)return;setStatus(s);if(s.isAdmin)refresh().catch(e=>setError(e.message))}).catch(e=>setError(e.message));return()=>{alive=false;working.current=false}},[])
+  useEffect(()=>{let alive=true;agentApi<Status>('/api/agent/status').then(s=>{if(!alive)return;setStatus(s);refresh().catch(e=>setError(e.message))}).catch(e=>setError(e.message));return()=>{alive=false;working.current=false}},[])
   const update=(job:Job)=>setJobs(list=>[job,...list.filter(j=>j.id!==job.id)].sort((a,b)=>b.id===job.id?1:a.id===job.id?-1:0))
   const run=async(jobId:string)=>{
     if(working.current)return
@@ -47,14 +47,13 @@ export default function ImportAgent({onClose,onOpen}:{onClose():void;onOpen(id:s
     <main className="import-main"><p className="lib-eyebrow">A NEW BOOK, A NEW WORLD</p><h1>把一本书，<br/><span>变成你的网页书。</span></h1><p className="import-lead">上传原著。剩下的章节整理、双语对齐和阅读排版，交给 Agent。</p>
       {error&&<div className="import-alert" role="alert">{error}</div>}
       {!status&&!error&&<p className="import-muted">正在连接上书服务…</p>}
-      {status&&!status.isAdmin&&<section className="import-gate"><Sparkle size={28}/><h2>{status.signedIn?'只有书库主人可以上书':'用你的 ChatGPT 账号管理书库'}</h2><p>所有人都可以阅读。上传书籍与调用模型，由书库主人管理。</p>{!status.signedIn&&<a className="lib-primary" href={status.signIn} target="_top">使用 ChatGPT 登录<ArrowRight/></a>}</section>}
-      {status?.isAdmin&&<>
+      {status&&<>
         <section className="import-upload" aria-label="上传书籍"><div className="import-upload-title"><span><UploadSimple size={21}/>添加一本书</span><small>EPUB / UTF-8 TXT · 每个文件不超过 20 MB</small></div>
           <div className="import-files"><label><input type="file" accept=".epub,.txt" disabled={loading||!!active} onChange={e=>setPrimary(e.target.files?.[0]||null)} aria-label="上传原著"/><FileText size={29}/><b>{primary?.name||'选择原著'}</b><span>英文或中文，自动识别</span></label><span className="import-plus"><Plus/></span><label><input type="file" accept=".epub,.txt" disabled={loading||!!active} onChange={e=>setCompanion(e.target.files?.[0]||null)} aria-label="上传对照译本"/><FileText size={29}/><b>{companion?.name||'添加对照译本'}</b><span>选填 · 有译本就直接对齐</span></label></div>
           <div className="import-upload-bottom"><p><b>有两个版本？</b>保留原著和现有译文，不重新翻译。<br/>只有一个版本时，Agent 会生成另一种语言。</p><button className="lib-primary" disabled={!primary||loading||!!active||!status.configured} onClick={start}>{loading?'正在处理':'开始整理'}<ArrowRight/></button></div>
           {message&&<p className="import-message" role="status">{message}</p>}
         </section>
-        <div className="import-notes"><span><Check/>逐批保存，支持继续处理</span><span><Check/>完成后先生成草稿</span><span><Check/>书籍正文不进入 GitHub</span></div>
+        <div className="import-notes"><span><Check/>免登录，直接上传</span><span><Check/>完成后先生成草稿</span><span><Check/>书籍正文不进入 GitHub</span></div>
         <section className="import-tasks" aria-label="处理任务"><div className="import-section-title"><h2>你的上书任务</h2><button onClick={()=>refresh().catch(e=>setError(e.message))}>刷新进度</button></div>
           {!jobs.length&&<div className="import-no-jobs">还没有上传任务。选一本你想读的书开始。</div>}
           {jobs.map(job=><article className="import-job" key={job.id}><div className="import-job-top"><div><span className={'import-badge '+(['draft','published'].includes(job.status)?'complete':'')}>{job.status==='published'?'已加入书库':job.status==='draft'?'草稿已就绪':active===job.id?'正在处理':job.status==='paused'?'等待继续':'等待处理'}</span><h3>{job.title}</h3><p>{job.chapters?`${job.chapters} 个正文章节 · `:''}{job.total?`已完成 ${job.cursor} / ${job.total} 批`:'识别目录、匹配两个版本'}{active===job.id&&job.cursor===job.total&&job.total>0?' · 正在生成网页书':''}</p></div><b>{job.percent}%</b></div><div className="import-progress"><i style={{width:`${job.percent}%`}}/></div>{!!job.reviewBatches&&<p className="import-review-note">有 {job.reviewBatches} 批需要复核（AI 检查发现疑点或未能完成）。建议复核第 {job.reviewChapters?.join("、")} 章。</p>}{job.error&&<p className="import-job-error">{job.error}</p>}
@@ -62,7 +61,7 @@ export default function ImportAgent({onClose,onOpen}:{onClose():void;onOpen(id:s
           </article>)}
         </section>
       </>}
-      <footer className="import-footer">书名封面由代码生成。整本书分批处理，请保持页面打开；关闭后可从已保存的位置继续。</footer>
+      <footer className="import-footer">书名封面由代码生成。整本书分批处理，请保持页面打开；关闭后可在同一浏览器继续。清除此站点的 Cookie 后，将无法找回未发布的任务，请及时下载备份。</footer>
     </main>
   </div></div>
 }

@@ -10,6 +10,7 @@ interface Props {
   notes: Note[]; addNote(text: string, quote?: string): void; editNote(id: string, text: string): void; delNote(id: string): void; goNote(n: Note): void
   draftQuote: { text: string; for: 'notes' | 'ai' } | null; clearQuote(): void
   chats: ChatMsg[]; sendChat(text: string, quote?: string): void; stopChat(): void; busy: boolean
+  chatError: string; retryChat(): void
   conv: string; setConv(id: string): void; newConv(): void; delConv(id: string): void
   ch: number
 }
@@ -20,12 +21,10 @@ export function SidePanel(p: Props) {
     <aside className="rpanel" aria-label={p.side === 'ai' ? 'AI 对话' : '笔记'}>
       <header>
         <h3>{p.side === 'ai' ? 'AI 对话' : '笔记'}</h3>
-        {p.side === 'ai' && p.user && false && <ChatActions {...p} />}
+        {p.side === 'ai' && <ChatActions {...p} />}
         <button className="icon-btn" onClick={() => p.setSide(null)} aria-label="关闭"><X weight="bold" /></button>
       </header>
-      {p.side === 'ai' ? (
-        <div className="side-gate ai-pending"><Sparkle weight="duotone" /><h4>AI 陪读尚未开启</h4><p>可以先自由阅读、翻译和记录想法。</p></div>
-      ) : !p.user ? (
+      {p.side === 'ai' ? <Chat {...p} /> : !p.user ? (
         <div className="side-gate">
           <p>笔记会保存在当前浏览器。</p>
           <button className="btn primary" onClick={p.onLogin}>登录 / 注册</button>
@@ -126,7 +125,7 @@ function ChatActions(p: Props) {
                 <button className="history-go" disabled={p.busy} onClick={() => { p.setConv(c.id); setOpen(false) }}>
                   <span>{c.title || '（无标题）'}</span><small>{when(c.last)}</small>
                 </button>
-                <button className="history-del" aria-label="删除这个对话" onClick={() => { if (confirm('删除这个对话？')) p.delConv(c.id) }}><Trash weight="bold" /></button>
+                <button className="history-del" disabled={p.busy} aria-label="删除这个对话" onClick={() => { if (confirm('删除这个对话？')) p.delConv(c.id) }}><Trash weight="bold" /></button>
               </li>
             ))}
           </ul>
@@ -136,7 +135,7 @@ function ChatActions(p: Props) {
   )
 }
 
-const SUGGEST = ['这一页在讲什么？', '这一页有哪些难懂的句子？', '主人公现在是什么心情？', '这一章的背景知识']
+const SUGGEST = ['这一页在讲什么？', '解释这一页的难句', '主人公现在是什么心情？', '解释这一页的生词']
 
 function Chat(p: Props) {
   const [text, setText] = useState('')
@@ -156,8 +155,9 @@ function Chat(p: Props) {
         {!msgs.length && (
           <div className="chat-empty">
             <Sparkle weight="duotone" />
-            <p>问我这本书的任何问题：句子看不懂、人物在想什么、背景典故……我会结合你正在读的这一页来回答。</p>
-            <div className="chips">{SUGGEST.map(s => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
+            <h4>和这本书，聊深一点。</h4>
+            <p>从一句话、一个词，到人物的心事。结合当前页与本章片段回答，也可以选中文字后点「问 AI」。</p>
+            <div className="chips">{SUGGEST.map(s => <button key={s} disabled={p.busy} onClick={() => send(s)}>{s}</button>)}</div>
           </div>
         )}
         {msgs.map(m => (
@@ -168,9 +168,11 @@ function Chat(p: Props) {
         ))}
       </div>
       <div className="composer">
+        <p className="chat-context">Mercury‑3 · 第 {p.ch} 章 · 当前页与章节片段</p>
+        {p.chatError&&<div className="chat-error" role="alert"><span>{p.chatError}</span><button disabled={p.busy} onClick={p.retryChat}>重试</button></div>}
         {quote && <Quote text={quote} onClear={p.clearQuote} />}
         <div className="pill">
-          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} rows={1} maxLength={2000} placeholder="问点什么…"
+          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} rows={1} maxLength={2000} placeholder={quote?'想怎样理解这段话？':'问点什么…'} aria-label="向 AI 提问"
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }} />
           {p.busy
             ? <button className="send stop" onClick={p.stopChat} aria-label="停止" title="停止"><Stop weight="fill" /></button>

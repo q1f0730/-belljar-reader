@@ -1,5 +1,6 @@
 // 账号与云同步。服务器上每类数据一个文档：{ items, del }，del 是删除记录（id → 删除时间），
 // 这样两台设备合并时，删掉的东西不会被另一台"复活"。
+import { sseData } from './sse'
 export interface User { name: string }
 export interface Note { id: string; text: string; ch?: number; unit?: string; quote?: string; created: number; upd: number }
 export interface ChatMsg { id: string; role: 'user' | 'assistant'; content: string; at: number; quote?: string; conv?: string } // conv：所属对话，旧数据没有则归到 'legacy'
@@ -99,18 +100,16 @@ export class Syncer<T extends { id: string }> {
 }
 
 // AI 对话：流式读取
-export async function ask(messages: { role: string; content: string }[], context: { chapter?: number; page?: string; quote?: string }, onText: (t: string) => void, signal?: AbortSignal) {
+export async function ask(messages: { role: string; content: string }[], context: import('./reading-context').ReadingContext, onText: (t: string) => void, signal?: AbortSignal) {
   const r = await fetch('/api/ai', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages, context }), signal })
   if (!r.ok || !r.body) { const d = await r.json().catch(() => ({})) as {message?:string;error?:string}; throw new Error(d.error || `AI 出错了（${r.status}）`) }
-  const rd = r.body.getReader(); const dec = new TextDecoder(); let buf = ''
-  for (;;) {
-    const { done, value } = await rd.read(); if (done) break
-    buf += dec.decode(value, { stream: true })
-    const parts = buf.split('\n\n'); buf = parts.pop() || ''
-    for (const p of parts) {
-      const d = p.replace(/^data:\s*/, '').trim(); if (!d || d === '[DONE]') continue
-      try { const t = JSON.parse(d).t; if (t) onText(t) } catch { /* ignore */ }
-    }
+  let complete = false
+  for await (const data of sseData(r.body)) {
+    if (data === '[DONE]') { complete = true; break }
+    const event = JSON.parse(data) as { t?: string; error?: string }
+    if (event.error) throw new Error(event.error)
+    if (event.t) onText(event.t)
   }
+  if (!complete) throw new Error('AI 回复中断，请稍后重试。')
 }
 
