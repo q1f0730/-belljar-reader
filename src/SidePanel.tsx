@@ -20,12 +20,14 @@ export function SidePanel(p: Props) {
     <aside className="rpanel" aria-label={p.side === 'ai' ? 'AI 对话' : '笔记'}>
       <header>
         <h3>{p.side === 'ai' ? 'AI 对话' : '笔记'}</h3>
-        {p.side === 'ai' && p.user && <ChatActions {...p} />}
+        {p.side === 'ai' && p.user && false && <ChatActions {...p} />}
         <button className="icon-btn" onClick={() => p.setSide(null)} aria-label="关闭"><X weight="bold" /></button>
       </header>
-      {!p.user ? (
+      {p.side === 'ai' ? (
+        <div className="side-gate ai-pending"><Sparkle weight="duotone" /><h4>AI 陪读尚未开启</h4><p>可以先自由阅读、翻译和记录想法。</p></div>
+      ) : !p.user ? (
         <div className="side-gate">
-          <p>{p.side === 'ai' ? '登录后可以和 AI 讨论这本书。' : '登录后可以写笔记。'}划线、笔记和对话会自动同步到你的账号，只有你自己看得到。</p>
+          <p>笔记会保存在当前浏览器。</p>
           <button className="btn primary" onClick={p.onLogin}>登录 / 注册</button>
         </div>
       ) : p.side === 'notes' ? <Notes {...p} /> : <Chat {...p} />}
@@ -206,3 +208,4 @@ export function Md({ text }: { text: string }) {
   flushPara(); flushList()
   return <div className="md">{blocks}</div>
 }
+

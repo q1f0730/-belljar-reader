@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Anchor, Chapter, DictEntry, Highlight, Lang, Mode, Prefs, Toc } from './types'
-import { loadChapter, loadDict, loadToc, lookup, RegionError } from './api'
-import * as store from './store'
+import { createBookApi, loadDict, lookup, RegionError } from './api'
+import { createBookStore } from './book-store'
+import type { Book } from './library'
 import { Reader, type ReaderHandle } from './Reader'
 import { Sidebar, type Panel } from './Sidebar'
 import { shortGloss } from './gloss'
 import { cmpUnit, tokens } from './text'
 import { addMerged, erase, overlaps, textOf } from './hl'
-import { Eraser, NotePencil, Sparkle, LockSimple } from '@phosphor-icons/react'
-import * as acct from './account'
+import { ArrowLeft, Eraser, NotePencil, Sparkle } from '@phosphor-icons/react'
 import type { ChatMsg, Note, User } from './account'
 import { SidePanel, type Side } from './SidePanel'
-import { Auth } from './Auth'
 
 const COLORS = ['#F5D77A', '#F4A3A3', '#9CC8F0', '#A8D5AE']
 const DEF_PREFS: Prefs = { fontSize: 19, theme: 'paper', spread: 'auto' }
@@ -21,7 +20,9 @@ interface Bubble { kind: 'word'; key: string; word: string; es: { key: string; e
 interface FnNote { kind: 'note'; text: string; x: number; y: number }
 interface SelPop { x: number; y: number; lang: Lang; start: Anchor; end: Anchor; text: string; over: boolean; edit?: string }
 
-export default function App() {
+export default function App({ book, onBack }: { book: Book; onBack(): void }) {
+  const store = useMemo(() => createBookStore(book.id), [book.id])
+  const { loadToc, loadChapter } = useMemo(() => createBookApi(book), [book])
   const [toc, setToc] = useState<Toc | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [region, setRegion] = useState<string | null>(null)
@@ -44,60 +45,18 @@ export default function App() {
   const [ready, setReady] = useState(false)
   const reader = useRef<ReaderHandle>(null)
   // —— 账号 / 同步 / 右侧面板 ——
-  const [user, setUser] = useState<User | null>(null)
-  const [authFor, setAuthFor] = useState<string | null>(null) // 非空 = 登录框打开，内容是提示语
+  const user: User = { name: '本机阅读' }
   const [side, setSide] = useState<Side>(null)
   const [notes, setNotes] = useState<Note[]>([])
   const [chats, setChats] = useState<ChatMsg[]>([])
   const [conv, setConv] = useState<string>(() => crypto.randomUUID()) // 当前对话；新对话 = 新 id，还没有消息
-  const [busy, setBusy] = useState(false)
-  const [syncState, setSyncState] = useState<'idle' | 'saving' | 'error'>('idle')
+  const busy = false
   const [draftQuote, setDraftQuote] = useState<{ text: string; for: 'notes' | 'ai' } | null>(null)
-  const synced = useRef(false) // 登录后的首次合并完成前不推送
-  const abort = useRef<AbortController | null>(null)
-  const sy = useRef<{ highlights: acct.Syncer<Highlight>; notes: acct.Syncer<Note>; chats: acct.Syncer<ChatMsg> } | null>(null)
-  if (!sy.current) {
-    const st = (s: 'idle' | 'saving' | 'error') => setSyncState(s)
-    sy.current = {
-      highlights: new acct.Syncer<Highlight>('highlights', setHls, st),
-      notes: new acct.Syncer<Note>('notes', setNotes, st),
-      chats: new acct.Syncer<ChatMsg>('chats', setChats, st),
-    }
-  }
   const dict = useRef<Record<string, DictEntry> | null>(null)
 
   const say = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(t => (t === m ? null : t)), 2400) }, [])
-  const hlsRef = useRef(hls); hlsRef.current = hls
   const selRef = useRef(sel); selRef.current = sel
   const curUnit = useRef<string | null>(null)
-  const notesRef = useRef(notes); notesRef.current = notes
-  const chatsRef = useRef(chats); chatsRef.current = chats
-
-  // 登录后：服务器数据和本机数据合并（本机未登录时划的线也会并进账号）
-  async function startSync(u: User, h: Highlight[], n: Note[], c: ChatMsg[]) {
-    synced.current = false
-    try {
-      const r = await acct.pullAll()
-      const s = sy.current!
-      const mh = s.highlights.init(r.highlights, h), mn = s.notes.init(r.notes, n), mc = s.chats.init(r.chats, c).sort((a, b) => a.at - b.at)
-      setHls(mh); setNotes(mn); setChats(mc); setUser(u)
-      synced.current = true
-      // 有本机独有的数据就推上去
-      if (mh.length !== asLen(r.highlights)) s.highlights.push(mh)
-      if (mn.length !== asLen(r.notes)) s.notes.push(mn)
-      if (mc.length !== asLen(r.chats)) s.chats.push(mc)
-    } catch (e) { setUser(u); synced.current = true; say('同步失败：' + (e as Error).message) }
-  }
-  const asLen = (x?: { data: unknown }) => acct.asDoc(x?.data).items.length
-  const onLogin = async (u: User) => { setAuthFor(null); await startSync(u, hlsRef.current, notesRef.current, chatsRef.current); say(`已登录：${u.name}`) }
-  const doLogout = async () => {
-    for (const s of Object.values(sy.current!)) await s.flush()
-    await acct.logout()
-    synced.current = false; setUser(null); setHls([]); setNotes([]); setChats([]); setSide(null)
-    for (const k of ['highlights', 'notes', 'chats']) await store.set(k, [])
-    say('已退出登录，本机上的划线和笔记已清除（账号里还在）')
-  }
-  const needLogin = (why: string) => { if (user) return false; setAuthFor(why); return true }
 
   // 笔记
   const addNote = (text: string, quote?: string) => {
@@ -107,33 +66,7 @@ export default function App() {
   const editNote = (id: string, text: string) => setNotes(ns => ns.map(n => (n.id === id ? { ...n, text, upd: Date.now() } : n)))
   const delNote = (id: string) => setNotes(ns => ns.filter(n => n.id !== id))
 
-  // AI：把当前这一页的文字一起发过去，AI 才知道读者在读哪
-  const pageText = () => {
-    const v = document.querySelector('.viewport')?.getBoundingClientRect(); if (!v) return ''
-    const out: string[] = []
-    document.querySelectorAll<HTMLElement>('.flow .unit').forEach(u => {
-      const r = u.getClientRects()[0]; if (r && r.left < v.right - 2 && r.right > v.left + 2) out.push(u.textContent || '')
-    })
-    return out.join(' ').replace(/\s+/g, ' ').slice(0, 3000)
-  }
-  const sendChat = async (text: string, quote?: string) => {
-    if (busy) return
-    const um: ChatMsg = { id: crypto.randomUUID(), role: 'user', content: text, quote, at: Date.now() }
-    const am: ChatMsg = { id: crypto.randomUUID(), role: 'assistant', content: '', at: Date.now() + 1 }
-    um.conv = am.conv = conv
-    const history = [...chatsRef.current.filter(m => (m.conv || 'legacy') === conv), um]
-    setChats(cs => [...cs, um, am]); setBusy(true)
-    const ctl = new AbortController(); abort.current = ctl
-    let acc = ''
-    try {
-      await acct.ask(history.map(m => ({ role: m.role, content: m.quote ? `（引用原文：${m.quote}）\n${m.content}` : m.content })),
-        { chapter: chap?.n, page: pageText(), quote }, t => { acc += t; setChats(cs => cs.map(m => (m.id === am.id ? { ...m, content: acc } : m))) }, ctl.signal)
-      if (!acc) setChats(cs => cs.map(m => (m.id === am.id ? { ...m, content: '（AI 没有返回内容，换个问法试试）' } : m)))
-    } catch (e) {
-      const msg = (e as Error).name === 'AbortError' ? (acc ? acc + '\n\n（已停止）' : '（已停止）') : (acc ? acc + '\n\n' : '') + '⚠ ' + (e as Error).message
-      setChats(cs => cs.map(m => (m.id === am.id ? { ...m, content: msg } : m)))
-    } finally { setBusy(false); abort.current = null }
-  }
+  const sendChat = () => say('AI 陪读尚未开启。')
 
   // 启动：恢复本机数据
   useEffect(() => {
@@ -150,8 +83,7 @@ export default function App() {
       setStartAt({ unit: prog?.unit }); setCh(prog?.ch || 1)
       const [n, c, cv] = await Promise.all([store.get<Note[]>('notes'), store.get<ChatMsg[]>('chats'), store.get<string>('conv')])
       if (cv) setConv(cv)
-      const u = await acct.me()
-      if (u) await startSync(u, h || [], n || [], c || [])
+      setNotes(n || []); setChats(c || [])
       setReady(true)
       setPersisted(await store.persist())
       try { setToc(await loadToc()) } catch (e) { if (e instanceof RegionError) setRegion(e.message); else setErr(String(e)) }
@@ -169,30 +101,6 @@ export default function App() {
   useEffect(() => { if (ready) store.set('notes', notes) }, [notes, ready])
   useEffect(() => { if (ready) store.set('chats', chats) }, [chats, ready])
   useEffect(() => { if (ready) store.set('conv', conv) }, [conv, ready])
-  // 登录状态下，本机改动自动推到服务器（AI 回答流式输出时等它说完再推）
-  useEffect(() => { if (user && synced.current) sy.current!.highlights.push(hls) }, [hls, user])
-  useEffect(() => { if (user && synced.current) sy.current!.notes.push(notes) }, [notes, user])
-  useEffect(() => { if (user && synced.current && !busy) sy.current!.chats.push(chats) }, [chats, user, busy])
-  // 回到页面时拉一次，拿到别的设备的改动
-  useEffect(() => {
-    if (!user) return
-    const f = async () => {
-      if (document.visibilityState !== 'visible' || !synced.current) return
-      try {
-        const r = await acct.pullAll()
-        sy.current!.highlights.refresh(r.highlights, hlsRef.current)
-        sy.current!.notes.refresh(r.notes, notesRef.current)
-        sy.current!.chats.refresh(r.chats, chatsRef.current)
-      } catch { /* 网络不好时下次再试 */ }
-    }
-    document.addEventListener('visibilitychange', f); const id = setInterval(f, 60_000)
-    return () => { document.removeEventListener('visibilitychange', f); clearInterval(id) }
-  }, [user])
-  // 关页面前把没推完的推掉
-  useEffect(() => {
-    const f = () => { if (!user) return; for (const s of Object.values(sy.current!)) s.flush() }
-    addEventListener('pagehide', f); return () => removeEventListener('pagehide', f)
-  }, [user])
   useEffect(() => { if (ready) store.set('flips', { base: baseZh, flips }) }, [baseZh, flips, ready])
   useEffect(() => { if (ready) store.set('mode', mode) }, [mode, ready])
   useEffect(() => { if (ready) store.set('trOn', trOn) }, [trOn, ready])
@@ -350,7 +258,6 @@ export default function App() {
   }
   const addHl = (color: string) => {
     if (!sel || !chap) return
-    if (needLogin('划线需要登录，登录后会自动同步。')) return
     if (sel.edit) setHls(h => h.map(x => (x.id === sel.edit ? { ...x, color } : x)))
     else setHls(h => addMerged(h, unitsOf(chap), { lang: sel.lang, ch: chap.n, start: sel.start, end: sel.end, color }))
     getSelection()?.removeAllRanges(); setSel(null)
@@ -366,15 +273,18 @@ export default function App() {
   // 选中的文字引用到笔记 / AI
   const quoteTo = (to: 'notes' | 'ai') => {
     if (!sel) return
-    if (needLogin(to === 'ai' ? 'AI 对话需要登录。' : '笔记需要登录，登录后会自动同步。')) return
     setDraftQuote({ text: sel.text.slice(0, 1500), for: to }); setPanel(null); setSide(to)
     getSelection()?.removeAllRanges(); setSel(null)
   }
 
   const onPage = useCallback(({ page, pages, unit }: { page: number; pages: number; unit: string | null }) => {
     setInfo({ page, pages }); setSel(null); curUnit.current = unit
-    if (unit && ready) store.set('progress', { ch: Number(unit.split('.')[0]), unit })
-  }, [ready])
+    if (unit && ready) {
+      const chapter = Number(unit.split('.')[0])
+      const percent = Math.min(100, ((chapter - 1 + (page + 1) / Math.max(1, pages)) / book.chapters) * 100)
+      store.set('progress', { ch: chapter, unit, percent, updated: Date.now() })
+    }
+  }, [ready, store, book.chapters])
 
   // 单词气泡定位
   const [bpos, setBpos] = useState<{ x: number; y: number; below: boolean } | null>(null)
@@ -399,7 +309,7 @@ export default function App() {
   const layoutKey = useMemo(() => `${baseZh}|${JSON.stringify(flips)}|${glosses.size}|${hls.length}|${prefs.spread}`, [baseZh, flips, glosses, hls, prefs.spread])
   const chHls = useMemo(() => (user ? hls.filter(h => h.ch === chap?.n) : []), [hls, chap, user])
 
-  if (region) return <div className="wall"><h1>The Bell Jar</h1><p>{region}</p></div>
+  if (region) return <div className="wall"><h1>{book.title}</h1><p>{region}</p></div>
   // 全书进度：章节号 + 本章页数占比；任何异常值（未加载、页数为 0、NaN）都夹到 0–100
   const rawPct = toc && chap && toc.chapters.length ? ((chap.n - 1 + (info.page + 1) / Math.max(1, info.pages)) / toc.chapters.length) * 100 : 0
   const pct = Number.isFinite(rawPct) ? Math.min(100, Math.max(0, rawPct)) : 0
@@ -410,8 +320,9 @@ export default function App() {
       if (!t.closest('.sel-pop,[data-hid]')) setSel(p => (p?.edit ? null : p))
       if (!t.closest('.sheet,.tools,.sel-pop')) { if (panel === 'tr') setPanel(null) }
     }}>
+      <button className="reader-library-back" onClick={onBack}><ArrowLeft weight="bold" />书库</button>
       <Sidebar panel={panel} setPanel={setPanel} trOn={trOn} toggleTr={toggleTr} mode={mode} baseZh={baseZh} setMode={setMode} toggleFull={toggleFull}
-        side={side} setSide={s => { setPanel(null); setSide(s) }} user={user} syncState={syncState} onAccount={() => (user ? setPanel('set') : setAuthFor(''))} onLogout={doLogout}
+        side={side} setSide={s => { setPanel(null); setSide(s) }} user={user}
         toc={toc} ch={ch} goCh={n => { setPanel(null); goCh(n) }} hls={user ? hls : []}
         goHl={h => goCh(h.ch, { unit: h.start.u })}
         delHl={id => setHls(h => h.filter(x => x.id !== id))}
@@ -419,14 +330,14 @@ export default function App() {
         prefs={prefs} setPrefs={setPrefsS} persisted={persisted}
         onExport={async () => {
           const blob = new Blob([JSON.stringify(await store.exportAll(), null, 1)], { type: 'application/json' })
-          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `belljar-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click()
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${book.id}-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click()
         }}
         onImport={async f => { try { await store.importAll(JSON.parse(await f.text())); location.reload() } catch (e) { say(String((e as Error).message)) } }}
       />
       <main className={'sheet-page' + (panel && panel !== 'tr' ? ' shifted' : '')}>
       {/* 顶部信息条：放在阅读页顶端中间，鼠标移到这条区域才显示 */}
       <div className="tb-zone"><header className="topbar">
-        <span className="tb-book">The Bell Jar</span>
+        <span className="tb-book">{book.englishTitle || book.title}</span>
         <i className="tb-sep" />
         <span className="tb-ch">{chap ? `Chapter ${chap.n}` : '…'}</span>
         <span className="tb-page mono">{info.page + 1} / {info.pages}</span>
@@ -463,7 +374,6 @@ export default function App() {
 
       {sel && createPortal(
         <div className="sel-pop" style={{ left: sel.x, top: sel.y }} onMouseDown={e => e.preventDefault()}>
-          {!user && <button className="sp-act" onClick={() => setAuthFor('划线、笔记和 AI 都需要登录，登录后自动同步。')}><LockSimple weight="bold" /><span>登录后划线</span></button>}
           {user && <span className="sp-l">{sel.edit ? '改颜色' : sel.lang === 'en' ? '划英文' : '划中文'}</span>}
           {user && COLORS.map(c => {
             const cur = sel.edit && hls.find(x => x.id === sel.edit)?.color === c
@@ -472,17 +382,17 @@ export default function App() {
           {sel.over && <><i className="sp-sep" /><button className="sp-erase" onClick={eraseHl} aria-label="取消划线"><Eraser weight="bold" /><span>取消</span></button></>}
           <i className="sp-sep" />
           <button className="sp-act" onClick={() => quoteTo('notes')} aria-label="记笔记"><NotePencil weight="bold" /><span>记笔记</span></button>
-          <button className="sp-act" onClick={() => quoteTo('ai')} aria-label="问 AI"><Sparkle weight="bold" /><span>问 AI</span></button>
+          <button className="sp-act" disabled title="AI 陪读尚未开启" aria-label="问 AI"><Sparkle weight="bold" /><span>问 AI</span></button>
         </div>, document.body)}
 
-      <SidePanel side={side} setSide={setSide} user={user} onLogin={() => setAuthFor('')}
+      <SidePanel side={side} setSide={setSide} user={user} onLogin={() => {}}
         notes={notes} addNote={addNote} editNote={editNote} delNote={delNote} goNote={n => n.ch && goCh(n.ch, { unit: n.unit })}
         draftQuote={draftQuote} clearQuote={() => setDraftQuote(null)}
-        chats={chats} sendChat={sendChat} stopChat={() => abort.current?.abort()} conv={conv} setConv={c => { if (!busy) setConv(c) }} newConv={() => { if (!busy) setConv(crypto.randomUUID()) }} delConv={id => { setChats(cs => cs.filter(m => (m.conv || 'legacy') !== id)); if (id === conv) setConv(crypto.randomUUID()) }} busy={busy} ch={chap?.n || ch} />
-      {authFor !== null && <Auth reason={authFor || undefined} onDone={onLogin} onClose={() => setAuthFor(null)} />}
+        chats={chats} sendChat={sendChat} stopChat={() => {}} conv={conv} setConv={c => { if (!busy) setConv(c) }} newConv={() => { if (!busy) setConv(crypto.randomUUID()) }} delConv={id => { setChats(cs => cs.filter(m => (m.conv || 'legacy') !== id)); if (id === conv) setConv(crypto.randomUUID()) }} busy={busy} ch={chap?.n || ch} />
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
 // keep tree-shaking honest
 void tokens
+

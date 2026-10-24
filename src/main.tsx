@@ -5,5 +5,6 @@ import '@fontsource-variable/newsreader/wght-italic.css'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import './index.css'
-import App from './App'
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+import LibraryApp from './Library'
+createRoot(document.getElementById('root')!).render(<StrictMode><LibraryApp /></StrictMode>)
+

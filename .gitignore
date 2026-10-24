@@ -28,3 +28,10 @@ private/
 *.epub
 .wrangler/
 .dev.vars
+.sites-runtime/
+outputs/
+*.tsbuildinfo
+
+
+# 原著和译文仅用于本地或 Sites 部署，不推送 GitHub
+/public/books/

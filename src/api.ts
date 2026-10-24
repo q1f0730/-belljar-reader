@@ -1,4 +1,5 @@
 import type { Chapter, DictEntry, Toc } from './types'
+import type { Book } from './library'
 export class RegionError extends Error {}
 async function j<T>(url: string): Promise<T> {
   const r = await fetch(url)
@@ -6,11 +7,17 @@ async function j<T>(url: string): Promise<T> {
   if (!r.ok) throw new Error(`加载失败 ${r.status}`)
   return r.json()
 }
-const cache = new Map<number, Promise<Chapter>>()
-export const loadToc = () => j<Toc>('/api/toc')
-export function loadChapter(n: number) {
-  if (!cache.has(n)) cache.set(n, j<Chapter>(`/api/ch/${n}`).catch(e => { cache.delete(n); throw e }))
-  return cache.get(n)!
+export function createBookApi(book: Book) {
+  const cache = new Map<number, Promise<Chapter>>()
+  const base = `/books/${encodeURIComponent(book.id)}`
+  return {
+    loadToc: () => j<Toc>(`${base}/toc.json`),
+    loadChapter(n: number) {
+      if (!Number.isInteger(n) || n < 1 || n > book.chapters) return Promise.reject(new Error('没有这一章'))
+      if (!cache.has(n)) cache.set(n, j<Chapter>(`${base}/ch${String(n).padStart(2, '0')}.json`).catch(e => { cache.delete(n); throw e }))
+      return cache.get(n)!
+    },
+  }
 }
 let dict: Promise<Record<string, DictEntry>> | null = null
 export const loadDict = () => (dict ??= j('/data/dict.json'))
@@ -24,3 +31,4 @@ export function lookup(d: Record<string, DictEntry>, raw: string): { key: string
   }
   return []
 }
+
